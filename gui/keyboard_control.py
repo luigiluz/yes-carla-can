@@ -1,4 +1,5 @@
 import carla
+from can_network import CANListener
 
 
 try:
@@ -46,7 +47,7 @@ try:
 except ImportError:
     raise RuntimeError('cannot import pygame, make sure pygame package is installed')
 
-class KeyboardControl(object):
+class KeyboardControl(CANListener):
     """Class that handles keyboard input."""
     def __init__(self, world, start_in_autopilot):
         self._autopilot_enabled = start_in_autopilot
@@ -338,6 +339,9 @@ class KeyboardControl(object):
         self._control.jump = keys[K_SPACE]
         self._rotation.yaw = round(self._rotation.yaw, 1)
         self._control.direction = self._rotation.get_forward_vector()
+
+    def notify(self, event):
+        print('[KeyboardControl] onNotify', event)
 
     @staticmethod
     def _is_quit_shortcut(key):

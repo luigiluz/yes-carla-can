@@ -1,4 +1,4 @@
-import constants as consts
+import can_network.constants as consts
 
 # The format of the communication matrix is the following:
 # <signal-name> : {

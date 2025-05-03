@@ -1,9 +1,9 @@
-import can
-from CAN_comm_matrix import (
+import can 
+from can_network.comm_matrix import (
     CAN_COMMUNICATION_MATRIX_DICT,
 )
-import constants as consts
-import utils
+import can_network.constants as consts
+import can_network.utils as utils
 import carla
 
 class CAN_Network(object):
