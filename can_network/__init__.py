@@ -1,7 +1,5 @@
-from .bus import CANBus
-from .listener import CANListener
+from .network import CAN_Network
 
 __all__ = [
-    'CANBus',
-    'CANListener'
+    'CAN_Network',
 ]
