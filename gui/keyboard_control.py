@@ -1,5 +1,5 @@
 import carla
-from can_network import CANListener
+from can_network.network import CAN_Network
 
 
 try:
@@ -47,13 +47,14 @@ try:
 except ImportError:
     raise RuntimeError('cannot import pygame, make sure pygame package is installed')
 
-class KeyboardControl(CANListener):
+class KeyboardControl(object):
     """Class that handles keyboard input."""
     def __init__(self, world, start_in_autopilot):
+        self._can = CAN_Network()
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
-        # self._can_net = CAN_network.CAN_Network()
+
         if isinstance(world.player, carla.Vehicle):
             self._control = carla.VehicleControl()
             self._ackermann_control = carla.VehicleAckermannControl()
@@ -66,6 +67,7 @@ class KeyboardControl(CANListener):
             self._rotation = world.player.get_transform().rotation
         else:
             raise NotImplementedError("Actor type not supported")
+
         self._steer_cache = 0.0
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
@@ -268,11 +270,10 @@ class KeyboardControl(CANListener):
                 if not self._ackermann_enabled:
                     # Send messages through CAN bus
                     # TODO: as "lights" precisam ser enviadas e recebidas antes
-                    # self._can_net.send_msg(self._control)
+                    self._can.send_msg(self._control)
                     # Receive messages from CAN bus
-                    # received_controls = self._can_net.recv_msg()
-                    # world.player.apply_control(received_controls)
-                    world.player.apply_control(self._control)
+                    received_controls = self._can.recv_msg()
+                    world.player.apply_control(received_controls)
                 else:
                     world.player.apply_ackermann_control(self._ackermann_control)
                     # Update control to the last one applied by the ackermann controller.
@@ -339,9 +340,6 @@ class KeyboardControl(CANListener):
         self._control.jump = keys[K_SPACE]
         self._rotation.yaw = round(self._rotation.yaw, 1)
         self._control.direction = self._rotation.get_forward_vector()
-
-    def notify(self, event):
-        print('[KeyboardControl] onNotify', event)
 
     @staticmethod
     def _is_quit_shortcut(key):

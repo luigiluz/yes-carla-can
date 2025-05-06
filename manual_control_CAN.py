@@ -74,7 +74,6 @@ import carla
 import pygame
 
 from gui import HUD, World, KeyboardControl
-from can_network import CANBus
 
 
 def game_loop(args):
@@ -117,11 +116,9 @@ def game_loop(args):
         display.fill((0,0,0))
         pygame.display.flip()
 
-        can_bus = CANBus()
         hud = HUD(args.width, args.height)
         world = World(sim_world, hud, args)
         controller = KeyboardControl(world, args.autopilot)
-        can_bus.subscribe(controller)
 
         if args.sync:
             sim_world.tick()
