@@ -71,7 +71,7 @@ class KeyboardControl(object):
         self._steer_cache = 0.0
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
-    def parse_events(self, client, world, clock, sync_mode):
+    def parse_events(self, client, world, clock, sync_mode, can_network):
         if isinstance(self._control, carla.VehicleControl):
             current_lights = self._lights
         for event in pygame.event.get():
@@ -250,29 +250,30 @@ class KeyboardControl(object):
 
         if not self._autopilot_enabled:
             if isinstance(self._control, carla.VehicleControl):
-                self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
-                self._control.reverse = self._control.gear < 0
-                # Set automatic control-related vehicle lights
-                if self._control.brake:
-                    current_lights |= carla.VehicleLightState.Brake
-                else: # Remove the Brake flag
-                    current_lights &= ~carla.VehicleLightState.Brake
-                if self._control.reverse:
-                    current_lights |= carla.VehicleLightState.Reverse
-                else: # Remove the Reverse flag
-                    current_lights &= ~carla.VehicleLightState.Reverse
-                if current_lights != self._lights: # Change the light state only if necessary
-                    self._lights = current_lights
-                    # As "lights"precisam ser enviadas e recebidas aqui em cima
-                    # Elas vem tudo num pacotão que é uma mensagem unica
-                    world.player.set_light_state(carla.VehicleLightState(self._lights))
-                # Apply control
+                #self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
+                #self._control.reverse = self._control.gear < 0
+                ## Set automatic control-related vehicle lights
+                #if self._control.brake:
+                #    current_lights |= carla.VehicleLightState.Brake
+                #else: # Remove the Brake flag
+                #    current_lights &= ~carla.VehicleLightState.Brake
+                #if self._control.reverse:
+                #    current_lights |= carla.VehicleLightState.Reverse
+                #else: # Remove the Reverse flag
+                #    current_lights &= ~carla.VehicleLightState.Reverse
+                #if current_lights != self._lights: # Change the light state only if necessary
+                #    self._lights = current_lights
+                #    # As "lights"precisam ser enviadas e recebidas aqui em cima
+                #    # Elas vem tudo num pacotão que é uma mensagem unica
+                #    world.player.set_light_state(carla.VehicleLightState(self._lights))
+                ## Apply control
                 if not self._ackermann_enabled:
                     # Send messages through CAN bus
                     # TODO: as "lights" precisam ser enviadas e recebidas antes
-                    self._can.send_msg(self._control)
+                    #if not receive_from_can:
+                    #    self._can.send_msg(self._control)
                     # Receive messages from CAN bus
-                    received_controls = self._can.recv_msg()
+                    received_controls = can_network.recv_msg()
                     world.player.apply_control(received_controls)
                 else:
                     world.player.apply_ackermann_control(self._ackermann_control)
