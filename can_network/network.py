@@ -19,7 +19,6 @@ class CAN_Network(object):
     def send_switch_door_state_msg(self):
         msg_data = utils.bool_to_hex_array(True)  # Assuming we want to open the door
         msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.DOORS_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
-        print(f"switch door state msg: {msg}")
         self.bus.send(msg)
 
     def recv_switch_door_state_msg(self):

@@ -153,7 +153,6 @@ def keyboard_parser_loop():
                     return True
                 elif event.key == K_o:
                     try:
-                        print(f"Sending door state msg")
                         can_net.send_switch_door_state_msg()
                     except:
                         pass
