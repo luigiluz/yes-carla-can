@@ -198,15 +198,6 @@ def keyboard_parser_loop():
 
 def main():
     print("Sending commands through CAN bus")
-    #can_net = can_network.CAN_Network()
-
-    #control = carla.VehicleControl()
-    #control = None # FIXME: Preciso pegar isso no formato correto a partir das teclas do teclado
-    #can_net.send_msg(control)
-
-    # O que eu preciso aqui é:
-    # Pegar as teclas pressionadas e enviar os comandos correspondentes pelo barramento CAN
-
     try:
         keyboard_parser_loop()
     except KeyboardInterrupt:
@@ -215,5 +206,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # TODO: Fazer leitura dos comandos do teclado
-    # Enviar pel barramento CAN
