@@ -53,8 +53,8 @@ except ImportError:
 
 class KeyboardSenderControl(object):
     """Class that handles keyboard input."""
-    def __init__(self, start_in_autopilot = False):
-        self._can = can_network.CAN_Network()
+    def __init__(self, can_network, start_in_autopilot = False):
+        #self._can = can_network
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
@@ -105,7 +105,7 @@ class KeyboardSenderControl(object):
         else:
             self._ackermann_control.steer = round(self._steer_cache, 1)
 
-    def parse_events(self, clock):
+    def parse_events(self, clock, can_network):
         current_lights = self._lights
         self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
         self._control.reverse = self._control.gear < 0
@@ -124,7 +124,12 @@ class KeyboardSenderControl(object):
             # Elas vem tudo num pacotão que é uma mensagem unica
             #world.player.set_light_state(carla.VehicleLightState(self._lights))
 
-        self._can.send_msg(self._control)
+        #self._can.send_msg(self._control)
+        can_network.send_msg(self._control)
+
+    @staticmethod
+    def _is_quit_shortcut(key):
+        return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 def keyboard_parser_loop():
     print("Starting keyboard parser loop")
@@ -132,17 +137,30 @@ def keyboard_parser_loop():
     pygame.font.init()
 
     screen = pygame.display.set_mode((640, 480))
-    controller = KeyboardSenderControl()
+    can_net = can_network.CAN_Network()
+    controller = KeyboardSenderControl(can_net)
     clock = pygame.time.Clock()
     running = True
 
     while running:
+        # Essas daqui pra baixo ficam dentro do parse_events no original
+        # Se funcionar, depois mover pra lá
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.KEYUP:
+                if controller._is_quit_shortcut(event.key):
+                    return True
+                elif event.key == K_o:
+                    try:
+                        print(f"Sending door state msg")
+                        can_net.send_switch_door_state_msg()
+                    except:
+                        pass
+
         clock.tick_busy_loop(60)
         #print(f"{pygame.key.get_pressed()})")
-        controller.parse_events(clock)
+        controller.parse_events(clock, can_net)
         pygame.display.flip()
 
 def main():

@@ -120,22 +120,6 @@ class KeyboardControl(object):
                         world.player.enable_constant_velocity(carla.Vector3D(17, 0, 0))
                         world.constant_velocity_enabled = True
                         world.hud.notification("Enabled Constant Velocity Mode at 60 km/h")
-                elif event.key == K_o:
-                    try:
-                        # TODO: Replace this with CAN messages
-                        # As portas são definidas aqui
-                        # A gente precisa entender em quais locais são feitas as interações com o "mundo" e como elas serão substituidas
-                        # pelo envio/recebimento da CAN
-                        if world.doors_are_open:
-                            world.hud.notification("Closing Doors")
-                            world.doors_are_open = False
-                            world.player.close_door(carla.VehicleDoor.All)
-                        else:
-                            world.hud.notification("Opening doors")
-                            world.doors_are_open = True
-                            world.player.open_door(carla.VehicleDoor.All)
-                    except Exception:
-                        pass
                 elif event.key == K_t:
                     if world.show_vehicle_telemetry:
                         world.player.show_debug_telemetry(False)
@@ -257,6 +241,19 @@ class KeyboardControl(object):
 
         if not self._autopilot_enabled:
             if isinstance(self._control, carla.VehicleControl):
+                if can_network.door_change_state:
+                    can_network.door_change_state = False
+                    try:
+                        if world.doors_are_open:
+                            world.hud.notification("Closing Doors")
+                            world.doors_are_open = False
+                            world.player.close_door(carla.VehicleDoor.All)
+                        else:
+                            world.hud.notification("Opening doors")
+                            world.doors_are_open = True
+                            world.player.open_door(carla.VehicleDoor.All)
+                    except Exception:
+                        pass
                 #self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
                 #self._control.reverse = self._control.gear < 0
                 ## Set automatic control-related vehicle lights

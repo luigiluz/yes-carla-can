@@ -7,6 +7,8 @@ import can_network.utils as utils
 import carla
 
 class CAN_Network(object):
+    #door_update_state_msg = False
+    door_change_state = False
 
     def __init__(self):
         self.bus = can.ThreadSafeBus(interface='socketcan', channel='vcan0', receive_own_messages=True)
@@ -14,6 +16,19 @@ class CAN_Network(object):
 
     # As variaveis que vem de controls podem ser encontradas aqui:
     # https://carla.readthedocs.io/en/latest/python_api/#carlavehiclecontrol
+    def send_switch_door_state_msg(self):
+        msg_data = utils.bool_to_hex_array(True)  # Assuming we want to open the door
+        msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.DOORS_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
+        print(f"switch door state msg: {msg}")
+        self.bus.send(msg)
+
+    def recv_switch_door_state_msg(self):
+        #if self.door_update_state_msg == True:
+        #self.door_update_state_msg = False
+        self.door_change_state = not self.door_change_state
+        # Nao posso chamar o bus_recv aqui, já que ele pode consumir a mensagem do buffer e perder a comunicação de outro lugar
+        return self.door_change_state
+
     def send_msg(self, controls):
         # Throttle msg (float)
         msg_data = utils.float_to_hex_array(controls.throttle)
@@ -74,6 +89,15 @@ class CAN_Network(object):
 
             elif recv_msg.arbitration_id == CAN_COMMUNICATION_MATRIX_DICT[consts.GEAR_KEY][consts.CAN_ID_KEY]:
                 self.recvd_controls.gear = utils.hex_array_to_int(recv_msg.data)
+
+            elif recv_msg.arbitration_id == CAN_COMMUNICATION_MATRIX_DICT[consts.DOORS_KEY][consts.CAN_ID_KEY]:
+                if utils.hex_array_to_bool(recv_msg.data):
+                    self.door_change_state = True
+                    #self.recv_switch_door_state_msg()
+                #print(f"receiving doors state msg")
+                #self.door_update_state = True if utils.hex_array_to_bool(recv_msg.data) else False
+                #print(f"doors state updated: {self.door_update_state}")
+
             recv_msg = self.bus.recv(timeout=0)
 
         return self.recvd_controls
