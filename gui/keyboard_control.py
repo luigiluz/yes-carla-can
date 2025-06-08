@@ -122,6 +122,7 @@ class KeyboardControl(object):
                         world.hud.notification("Enabled Constant Velocity Mode at 60 km/h")
                 elif event.key == K_o:
                     try:
+                        # TODO: Replace this with CAN messages
                         # As portas são definidas aqui
                         # A gente precisa entender em quais locais são feitas as interações com o "mundo" e como elas serão substituidas
                         # pelo envio/recebimento da CAN
@@ -221,10 +222,13 @@ class KeyboardControl(object):
                         world.hud.notification(
                             'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
+                        #TODO: Replace this with CAN messages
                         current_lights ^= carla.VehicleLightState.Special1
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
+                        #TODO: Replace this with CAN messages
                         current_lights ^= carla.VehicleLightState.HighBeam
                     elif event.key == K_l:
+                        #TODO: Replace this with CAN messages
                         # Use 'L' key to switch between lights:
                         # closed -> position -> low beam -> fog
                         if not self._lights & carla.VehicleLightState.Position:
@@ -242,10 +246,13 @@ class KeyboardControl(object):
                             current_lights ^= carla.VehicleLightState.LowBeam
                             current_lights ^= carla.VehicleLightState.Fog
                     elif event.key == K_i:
+                        #TODO: Replace this with CAN message
                         current_lights ^= carla.VehicleLightState.Interior
                     elif event.key == K_z:
+                        #TODO: Replace this with CAN message
                         current_lights ^= carla.VehicleLightState.LeftBlinker
                     elif event.key == K_x:
+                        #TODO: Replace this with CAN message
                         current_lights ^= carla.VehicleLightState.RightBlinker
 
         if not self._autopilot_enabled:
