@@ -72,8 +72,6 @@ class KeyboardControl(object):
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
     def parse_events(self, client, world, clock, sync_mode, can_network):
-        #if isinstance(self._control, carla.VehicleControl):
-        #    current_lights = self._lights
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
