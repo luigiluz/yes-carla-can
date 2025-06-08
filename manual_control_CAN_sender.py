@@ -136,11 +136,28 @@ class KeyboardSenderControl(object):
                         current_lights ^= carla.VehicleLightState.LowBeam
                         current_lights ^= carla.VehicleLightState.Fog
                 elif event.key == K_i:
-                    current_lights ^= carla.VehicleLightState.Interior #TODO: Replace this with CAN message
+                    current_lights ^= carla.VehicleLightState.Interior
                 elif event.key == K_z:
-                    current_lights ^= carla.VehicleLightState.LeftBlinker #TODO: Replace this with CAN message
+                    current_lights ^= carla.VehicleLightState.LeftBlinker
                 elif event.key == K_x:
-                    current_lights ^= carla.VehicleLightState.RightBlinker #TODO: Replace this with CAN message
+                    current_lights ^= carla.VehicleLightState.RightBlinker
+                # Gear, Reverse and Manual Gear Control
+                if event.key == K_q:
+                    if not self._ackermann_enabled:
+                        self._control.gear = 1 if self._control.reverse else -1
+                    else:
+                        self._ackermann_reverse *= -1
+                        # Reset ackermann control
+                        self._ackermann_control = carla.VehicleAckermannControl()
+                elif event.key == K_m:
+                    self._control.manual_gear_shift = not self._control.manual_gear_shift
+                    #self._control.gear = world.player.get_control().gear # Esse eu preciso entender como que vem
+                elif self._control.manual_gear_shift and event.key == K_COMMA:
+                    self._control.gear = max(-1, self._control.gear - 1)
+                elif self._control.manual_gear_shift and event.key == K_PERIOD:
+                    self._control.gear = self._control.gear + 1
+
+
         self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
         self._control.reverse = self._control.gear < 0
         # Set automatic control-related vehicle lights
