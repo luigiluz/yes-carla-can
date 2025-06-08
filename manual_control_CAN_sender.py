@@ -1,10 +1,7 @@
-import can
-import time
 import carla
+import tkinter as tk
 
 import can_network
-
-from gui import keyboard_control
 
 try:
     import pygame
@@ -185,7 +182,13 @@ def keyboard_parser_loop():
     pygame.init()
     pygame.font.init()
 
-    screen = pygame.display.set_mode((640, 480))
+    root = tk.Tk()
+    width = root.winfo_screenwidth()
+    height = root.winfo_screenheight()
+    root.destroy()
+    print(f"width: {width}, height: {height}")
+
+    screen = pygame.display.set_mode((int(width/2), int(height/2)))
     can_net = can_network.CAN_Network()
     controller = KeyboardSenderControl(can_net)
     clock = pygame.time.Clock()
