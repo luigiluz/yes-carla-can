@@ -106,7 +106,7 @@ class KeyboardSenderControl(object):
             self._ackermann_control.steer = round(self._steer_cache, 1)
 
     def parse_events(self, clock, can_network):
-        current_lights = can_network.current_lights
+        current_lights = self._lights
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
