@@ -9,7 +9,7 @@ import carla
 class CAN_Network(object):
 
     def __init__(self):
-        self.bus = can.interface.Bus(channel='vcan0', interface='socketcan', receive_own_messages=True)
+        self.bus = can.ThreadSafeBus(interface='socketcan', channel='vcan0', receive_own_messages=True)
         self.recvd_controls = carla.VehicleControl()
 
     # As variaveis que vem de controls podem ser encontradas aqui:
@@ -53,8 +53,7 @@ class CAN_Network(object):
 
     def recv_msg(self):
         recv_msg = self.bus.recv(timeout=0)
-        #while recv_msg is not None:
-        if recv_msg is not None:
+        while recv_msg is not None:
             if recv_msg.arbitration_id == CAN_COMMUNICATION_MATRIX_DICT[consts.THROTTLE_KEY][consts.CAN_ID_KEY]:
                 self.recvd_controls.throttle = utils.hex_array_to_float(recv_msg.data)
 
@@ -75,7 +74,7 @@ class CAN_Network(object):
 
             elif recv_msg.arbitration_id == CAN_COMMUNICATION_MATRIX_DICT[consts.GEAR_KEY][consts.CAN_ID_KEY]:
                 self.recvd_controls.gear = utils.hex_array_to_int(recv_msg.data)
-            #recv_msg = self.bus.recv(timeout=0)
+            recv_msg = self.bus.recv(timeout=0)
 
         return self.recvd_controls
 
