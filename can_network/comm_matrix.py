@@ -46,24 +46,28 @@ CAN_COMMUNICATION_MATRIX_DICT = {
 		consts.CAN_ID_KEY: 0x607,
 		consts.PERIOD_KEY: 0.01
 	},
-	consts.LIGHT_TYPE_KEY: {
-		consts.CAN_ID_KEY: 0x608,
-		consts.PERIOD_KEY: 0.01
-	},
-	consts.HIGH_BEAM_KEY: {
-		consts.CAN_ID_KEY: 0x609,
-		consts.PERIOD_KEY: 0.01
-	},
-	consts.BLINKER_KEY: {
-		consts.CAN_ID_KEY: 0x60A,
-		consts.PERIOD_KEY: 0.01
-	},
-	consts.INTERIOR_LIGHT_KEY: {
-		consts.CAN_ID_KEY: 0x60B,
-		consts.PERIOD_KEY: 0.01
-	},
+	#consts.LIGHT_TYPE_KEY: {
+	#	consts.CAN_ID_KEY: 0x608,
+	#	consts.PERIOD_KEY: 0.01
+	#},
+	#consts.HIGH_BEAM_KEY: {
+	#	consts.CAN_ID_KEY: 0x609,
+	#	consts.PERIOD_KEY: 0.01
+	#},
+	#consts.BLINKER_KEY: {
+	#	consts.CAN_ID_KEY: 0x60A,
+	#	consts.PERIOD_KEY: 0.01
+	#},
+	#consts.INTERIOR_LIGHT_KEY: {
+	#	consts.CAN_ID_KEY: 0x60B,
+	#	consts.PERIOD_KEY: 0.01
+	#},
 	consts.DOORS_KEY: {
 		consts.CAN_ID_KEY: 0x60C,
 		consts.PERIOD_KEY: 0.01
 	},
+	consts.GENERAL_LIGHTS_KEY: {
+		consts.CAN_ID_KEY: 0x60D,
+		consts.PERIOD_KEY: 0.01
+	}
 }

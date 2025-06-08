@@ -9,6 +9,7 @@ import carla
 class CAN_Network(object):
     #door_update_state_msg = False
     door_change_state = False
+    current_lights = carla.VehicleLightState.NONE
 
     def __init__(self):
         self.bus = can.ThreadSafeBus(interface='socketcan', channel='vcan0', receive_own_messages=True)
@@ -21,11 +22,13 @@ class CAN_Network(object):
         msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.DOORS_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
         self.bus.send(msg)
 
+    def send_current_lights_msg(self, lights):
+        msg_data = utils.int_to_hex_array(lights)
+        msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.GENERAL_LIGHTS_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
+        self.bus.send(msg)
+
     def recv_switch_door_state_msg(self):
-        #if self.door_update_state_msg == True:
-        #self.door_update_state_msg = False
         self.door_change_state = not self.door_change_state
-        # Nao posso chamar o bus_recv aqui, já que ele pode consumir a mensagem do buffer e perder a comunicação de outro lugar
         return self.door_change_state
 
     def send_msg(self, controls):
@@ -44,22 +47,22 @@ class CAN_Network(object):
         msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.BRAKE_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
         self.bus.send(msg)
 
-        # Hand brake msg (bool)
+        # FIXME: Hand brake msg (bool)
         msg_data = utils.bool_to_hex_array(controls.hand_brake)
         msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.HAND_BRAKE_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
         self.bus.send(msg)
 
-        # Reverse msg (bool)
+        # FIXME: Reverse msg (bool)
         msg_data = utils.bool_to_hex_array(controls.reverse)
         msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.REVERSE_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
         self.bus.send(msg)
 
-        # Manual gear shift msg (bool)
+        # FIXME: Manual gear shift msg (bool)
         msg_data = utils.bool_to_hex_array(controls.manual_gear_shift)
         msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.MANUAL_TRANSMISSION_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
         self.bus.send(msg)
 
-        # Gear msg (int)
+        # FIXME: Gear msg (int)
         msg_data = utils.int_to_hex_array(controls.gear)
         msg = can.Message(arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.GEAR_KEY][consts.CAN_ID_KEY], data=msg_data, is_extended_id=False)
         self.bus.send(msg)
@@ -92,10 +95,9 @@ class CAN_Network(object):
             elif recv_msg.arbitration_id == CAN_COMMUNICATION_MATRIX_DICT[consts.DOORS_KEY][consts.CAN_ID_KEY]:
                 if utils.hex_array_to_bool(recv_msg.data):
                     self.door_change_state = True
-                    #self.recv_switch_door_state_msg()
-                #print(f"receiving doors state msg")
-                #self.door_update_state = True if utils.hex_array_to_bool(recv_msg.data) else False
-                #print(f"doors state updated: {self.door_update_state}")
+
+            elif recv_msg.arbitration_id == CAN_COMMUNICATION_MATRIX_DICT[consts.GENERAL_LIGHTS_KEY][consts.CAN_ID_KEY]:
+                self.current_lights = carla.VehicleLightState(utils.hex_array_to_int(recv_msg.data))
 
             recv_msg = self.bus.recv(timeout=0)
 

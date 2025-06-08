@@ -72,8 +72,8 @@ class KeyboardControl(object):
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
     def parse_events(self, client, world, clock, sync_mode, can_network):
-        if isinstance(self._control, carla.VehicleControl):
-            current_lights = self._lights
+        #if isinstance(self._control, carla.VehicleControl):
+        #    current_lights = self._lights
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
@@ -205,39 +205,6 @@ class KeyboardControl(object):
                         world.player.set_autopilot(self._autopilot_enabled)
                         world.hud.notification(
                             'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
-                    elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
-                        #TODO: Replace this with CAN messages
-                        current_lights ^= carla.VehicleLightState.Special1
-                    elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
-                        #TODO: Replace this with CAN messages
-                        current_lights ^= carla.VehicleLightState.HighBeam
-                    elif event.key == K_l:
-                        #TODO: Replace this with CAN messages
-                        # Use 'L' key to switch between lights:
-                        # closed -> position -> low beam -> fog
-                        if not self._lights & carla.VehicleLightState.Position:
-                            world.hud.notification("Position lights")
-                            current_lights |= carla.VehicleLightState.Position
-                        else:
-                            world.hud.notification("Low beam lights")
-                            current_lights |= carla.VehicleLightState.LowBeam
-                        if self._lights & carla.VehicleLightState.LowBeam:
-                            world.hud.notification("Fog lights")
-                            current_lights |= carla.VehicleLightState.Fog
-                        if self._lights & carla.VehicleLightState.Fog:
-                            world.hud.notification("Lights off")
-                            current_lights ^= carla.VehicleLightState.Position
-                            current_lights ^= carla.VehicleLightState.LowBeam
-                            current_lights ^= carla.VehicleLightState.Fog
-                    elif event.key == K_i:
-                        #TODO: Replace this with CAN message
-                        current_lights ^= carla.VehicleLightState.Interior
-                    elif event.key == K_z:
-                        #TODO: Replace this with CAN message
-                        current_lights ^= carla.VehicleLightState.LeftBlinker
-                    elif event.key == K_x:
-                        #TODO: Replace this with CAN message
-                        current_lights ^= carla.VehicleLightState.RightBlinker
 
         if not self._autopilot_enabled:
             if isinstance(self._control, carla.VehicleControl):
@@ -254,6 +221,40 @@ class KeyboardControl(object):
                             world.player.open_door(carla.VehicleDoor.All)
                     except Exception:
                         pass
+                #elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
+                #    #TODO: Replace this with CAN messages
+                #    current_lights ^= carla.VehicleLightState.Special1
+                #elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
+                #    #TODO: Replace this with CAN messages
+                #    current_lights ^= carla.VehicleLightState.HighBeam
+                #elif event.key == K_l:
+                    #TODO: Replace this with CAN messages
+                    # Use 'L' key to switch between lights:
+                    # closed -> position -> low beam -> fog
+                    if not self._lights & carla.VehicleLightState.Position:
+                        world.hud.notification("Position lights")
+                        #current_lights |= carla.VehicleLightState.Position
+                    else:
+                        world.hud.notification("Low beam lights")
+                        #current_lights |= carla.VehicleLightState.LowBeam
+                    if self._lights & carla.VehicleLightState.LowBeam:
+                        world.hud.notification("Fog lights")
+                        #current_lights |= carla.VehicleLightState.Fog
+                    if self._lights & carla.VehicleLightState.Fog:
+                        world.hud.notification("Lights off")
+                        #current_lights ^= carla.VehicleLightState.Position
+                        #current_lights ^= carla.VehicleLightState.LowBeam
+                        #current_lights ^= carla.VehicleLightState.Fog
+                #elif event.key == K_i:
+                #    #TODO: Replace this with CAN message
+                #    current_lights ^= carla.VehicleLightState.Interior
+                #elif event.key == K_z:
+                #    #TODO: Replace this with CAN message
+                #    current_lights ^= carla.VehicleLightState.LeftBlinker
+                #elif event.key == K_x:
+                #    #TODO: Replace this with CAN message
+                #    current_lights ^= carla.VehicleLightState.RightBlinker
+
                 #self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
                 #self._control.reverse = self._control.gear < 0
                 ## Set automatic control-related vehicle lights
@@ -269,7 +270,10 @@ class KeyboardControl(object):
                 #    self._lights = current_lights
                 #    # As "lights"precisam ser enviadas e recebidas aqui em cima
                 #    # Elas vem tudo num pacotão que é uma mensagem unica
-                #    world.player.set_light_state(carla.VehicleLightState(self._lights))
+                current_lights = can_network.current_lights
+                if current_lights != self._lights:  # Change the light state only if necessary
+                    self._lights = current_lights
+                    world.player.set_light_state(carla.VehicleLightState(self._lights))
                 ## Apply control
                 if not self._ackermann_enabled:
                     # Send messages through CAN bus

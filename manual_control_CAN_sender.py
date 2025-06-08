@@ -106,7 +106,41 @@ class KeyboardSenderControl(object):
             self._ackermann_control.steer = round(self._steer_cache, 1)
 
     def parse_events(self, clock, can_network):
-        current_lights = self._lights
+        current_lights = can_network.current_lights
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return True
+            elif event.type == pygame.KEYUP:
+                if self._is_quit_shortcut(event.key):
+                    return True
+                elif event.key == K_o:
+                    try:
+                        can_network.send_switch_door_state_msg()
+                    except:
+                        pass
+                elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
+                    current_lights ^= carla.VehicleLightState.Special1 #TODO: Replace this with CAN messages
+                elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
+                    current_lights ^= carla.VehicleLightState.HighBeam #TODO: Replace this with CAN messages
+                elif event.key == K_l:
+                    # Use 'L' key to switch between lights:
+                    # closed -> position -> low beam -> fog
+                    if not self._lights & carla.VehicleLightState.Position: #TODO: Replace this with CAN messages
+                        current_lights |= carla.VehicleLightState.Position
+                    else:
+                        current_lights |= carla.VehicleLightState.LowBeam
+                    if self._lights & carla.VehicleLightState.LowBeam:
+                        current_lights |= carla.VehicleLightState.Fog
+                    if self._lights & carla.VehicleLightState.Fog:
+                        current_lights ^= carla.VehicleLightState.Position
+                        current_lights ^= carla.VehicleLightState.LowBeam
+                        current_lights ^= carla.VehicleLightState.Fog
+                elif event.key == K_i:
+                    current_lights ^= carla.VehicleLightState.Interior #TODO: Replace this with CAN message
+                elif event.key == K_z:
+                    current_lights ^= carla.VehicleLightState.LeftBlinker #TODO: Replace this with CAN message
+                elif event.key == K_x:
+                    current_lights ^= carla.VehicleLightState.RightBlinker #TODO: Replace this with CAN message
         self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
         self._control.reverse = self._control.gear < 0
         # Set automatic control-related vehicle lights
@@ -118,13 +152,11 @@ class KeyboardSenderControl(object):
             current_lights |= carla.VehicleLightState.Reverse
         else: # Remove the Reverse flag
             current_lights &= ~carla.VehicleLightState.Reverse
-        if current_lights != self._lights: # Change the light state only if necessary
-            self._lights = current_lights
-            # As "lights"precisam ser enviadas e recebidas aqui em cima
-            # Elas vem tudo num pacotão que é uma mensagem unica
-            #world.player.set_light_state(carla.VehicleLightState(self._lights))
 
-        #self._can.send_msg(self._control)
+        if self._lights != current_lights:
+            self._lights = current_lights
+
+        can_network.send_current_lights_msg(current_lights)
         can_network.send_msg(self._control)
 
     @staticmethod
@@ -143,22 +175,7 @@ def keyboard_parser_loop():
     running = True
 
     while running:
-        # Essas daqui pra baixo ficam dentro do parse_events no original
-        # Se funcionar, depois mover pra lá
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYUP:
-                if controller._is_quit_shortcut(event.key):
-                    return True
-                elif event.key == K_o:
-                    try:
-                        can_net.send_switch_door_state_msg()
-                    except:
-                        pass
-
         clock.tick_busy_loop(60)
-        #print(f"{pygame.key.get_pressed()})")
         controller.parse_events(clock, can_net)
         pygame.display.flip()
 
