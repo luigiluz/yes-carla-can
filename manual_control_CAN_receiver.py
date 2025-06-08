@@ -72,6 +72,7 @@ except IndexError:
 
 import carla
 import pygame
+import tkinter as tk
 
 from can_network.network import CAN_Network
 
@@ -81,6 +82,13 @@ from gui import HUD, World, KeyboardControl
 def game_loop(args):
     pygame.init()
     pygame.font.init()
+
+    root = tk.Tk()
+    width = root.winfo_screenwidth()
+    height = root.winfo_screenheight()
+    root.destroy()
+    print(f"width: {width}, height: {height}")
+
     world = None
     original_settings = None
     can_bus = CAN_Network()
@@ -114,12 +122,12 @@ def game_loop(args):
                   "experience some issues with the traffic simulation")
 
         display = pygame.display.set_mode(
-            (args.width, args.height),
+            (width/2, height/2),
             pygame.HWSURFACE | pygame.DOUBLEBUF)
         display.fill((0,0,0))
         pygame.display.flip()
 
-        hud = HUD(args.width, args.height)
+        hud = HUD(width/2, height/2)
         world = World(sim_world, hud, args)
         controller = KeyboardControl(world, args.autopilot)
 
