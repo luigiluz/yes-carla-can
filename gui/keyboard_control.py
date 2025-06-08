@@ -181,22 +181,6 @@ class KeyboardControl(object):
                         world.hud.show_ackermann_info(self._ackermann_enabled)
                         world.hud.notification("Ackermann Controller %s" %
                                                ("Enabled" if self._ackermann_enabled else "Disabled"))
-                    if event.key == K_q:
-                        if not self._ackermann_enabled:
-                            self._control.gear = 1 if self._control.reverse else -1
-                        else:
-                            self._ackermann_reverse *= -1
-                            # Reset ackermann control
-                            self._ackermann_control = carla.VehicleAckermannControl()
-                    elif event.key == K_m:
-                        self._control.manual_gear_shift = not self._control.manual_gear_shift
-                        self._control.gear = world.player.get_control().gear
-                        world.hud.notification('%s Transmission' %
-                                               ('Manual' if self._control.manual_gear_shift else 'Automatic'))
-                    elif self._control.manual_gear_shift and event.key == K_COMMA:
-                        self._control.gear = max(-1, self._control.gear - 1)
-                    elif self._control.manual_gear_shift and event.key == K_PERIOD:
-                        self._control.gear = self._control.gear + 1
                     elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
                         if not self._autopilot_enabled and not sync_mode:
                             print("WARNING: You are currently in asynchronous mode and could "
@@ -221,19 +205,16 @@ class KeyboardControl(object):
                             world.player.open_door(carla.VehicleDoor.All)
                     except Exception:
                         pass
-                # FIXME: World notifications are not appearing
-                # Use 'L' key to switch between lights:
-                # closed -> position -> low beam -> fog
+
+                world.hud.notification('%s Transmission' %
+                                           ('Manual' if self._control.manual_gear_shift else 'Automatic'))
 
                 if not self._lights & carla.VehicleLightState.Position:
                     world.hud.notification("Position lights")
-                    #current_lights |= carla.VehicleLightState.Position
                 else:
                     world.hud.notification("Low beam lights")
-                    #current_lights |= carla.VehicleLightState.LowBeam
                 if self._lights & carla.VehicleLightState.LowBeam:
                     world.hud.notification("Fog lights")
-                    #current_lights |= carla.VehicleLightState.Fog
                 if self._lights & carla.VehicleLightState.Fog:
                     world.hud.notification("Lights off")
 
