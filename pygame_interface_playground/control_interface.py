@@ -11,23 +11,24 @@ pygame.display.set_caption("Keyboard Visualizer")
 # Fonts
 font = pygame.font.SysFont(None, 36)
 small_font = pygame.font.SysFont(None, 24)
+big_font = pygame.font.SysFont(None, 48)
 
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GRAY = (200, 200, 200)
 GREEN = (100, 255, 100)
+DARK_GRAY = (50, 50, 50)
 
 # Key definitions: (pygame_key_code, label, note)
 key_definitions = [
     (pygame.K_q, 'Q', 'Reverse'),
-    (pygame.K_w, 'W', 'Move Up'),
-    (pygame.K_r, 'R', 'Right Blinker'),
+    (pygame.K_w, 'W', 'Move Forward'),
     (pygame.K_i, 'I', 'Interior Light'),
     (pygame.K_o, 'O', 'Doors'),
 
     (pygame.K_a, 'A', 'Move Left'),
-    (pygame.K_s, 'S', 'Move Down'),
+    (pygame.K_s, 'S', 'Brake'),
     (pygame.K_d, 'D', 'Move Right'),
     (pygame.K_l, 'L', 'Light type'),
 
@@ -38,8 +39,13 @@ key_definitions = [
     (pygame.K_PERIOD, '.', 'Gear Down'),
 
     (pygame.K_LSHIFT, 'SHIFT', ''),
-    (pygame.K_SPACE, 'SPACE', 'Jump'),
+    (pygame.K_SPACE, 'SPACE', 'Hand Brake'),
     (pygame.K_ESCAPE, 'ESC', 'Exit'),
+
+    (pygame.K_UP, 'UP', 'Move Forward'),
+    (pygame.K_DOWN, 'DOWN', 'Brake'),
+    (pygame.K_LEFT, 'LEFT', 'Steer Left'),
+    (pygame.K_RIGHT, 'RIGHT', 'Steer Right'),
 ]
 
 # Keyboard grid positions → column, row
@@ -48,7 +54,6 @@ key_definitions = [
 key_positions = {
     'Q': (1, 1),
     'W': (2, 1),  # Added W here
-    'R': (4, 1),
     'I': (8, 1),
     'O': (9, 1),
 
@@ -66,6 +71,12 @@ key_positions = {
     'SHIFT': (0.5, 4),
     'SPACE': (4, 4),
     'ESC': (0, 0),  # top-left corner (fixed)
+
+    # Arrow keys layout
+    'UP': (12, 3.5),
+    'LEFT': (11.5, 4.5),
+    'DOWN': (12, 4.5),
+    'RIGHT': (12.5, 4.5),
 }
 
 # Layout parameters
@@ -83,14 +94,24 @@ for key_code, label, note in key_definitions:
         col, row = key_positions[label]
         x_frac = start_x_frac + col * (key_width_frac + h_spacing)
         y_frac = start_y_frac + row * (key_height_frac + v_spacing)
+
+        # Make space key wider
+        if label == "SPACE":
+            w_frac = key_width_frac * 5
+        else:
+            w_frac = key_width_frac
+
         keys.append((key_code, label, note, (x_frac, y_frac, key_width_frac, key_height_frac)))
     else:
         print(f"Warning: No position defined for key {label}")
 
-# Track pressed state of each key
-pressed_state = {key_code: False for key_code, *_ in keys}
-
 def main():
+    # Track pressed state of each key
+    pressed_state = {key_code: False for key_code, *_ in keys}
+
+    # Keep track of the last key pressed (for displaying note)
+    last_pressed_note = ""
+
     # Main loop
     clock = pygame.time.Clock()
     running = True
@@ -103,13 +124,32 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key in pressed_state:
                     pressed_state[event.key] = True
+                    # Update last_pressed_note
+                    for key_code, label, note, _ in keys:
+                        if event.key == key_code:
+                            last_pressed_note = note
 
             elif event.type == pygame.KEYUP:
                 if event.key in pressed_state:
                     pressed_state[event.key] = False
+                    # If no keys pressed, clear last_pressed_note
+                    if not any(pressed_state.values()):
+                        last_pressed_note = ""
 
         # Clear screen
         screen.fill(BLACK)
+
+        # Draw the top note rectangle
+        top_rect_w = WIDTH * 0.6
+        top_rect_h = HEIGHT * 0.1
+        top_rect_x = (WIDTH - top_rect_w) // 2
+        top_rect_y = HEIGHT * 0.03
+
+        pygame.draw.rect(screen, DARK_GRAY, (top_rect_x, top_rect_y, top_rect_w, top_rect_h), border_radius=12)
+        note_text = last_pressed_note if last_pressed_note else "Press a key"
+        note_surf = big_font.render(note_text, True, WHITE)
+        note_rect = note_surf.get_rect(center=(WIDTH // 2, top_rect_y + top_rect_h // 2))
+        screen.blit(note_surf, note_rect)
 
         # Draw keys
         for key_code, label, note, rect_frac in keys:
@@ -124,13 +164,8 @@ def main():
 
             # Draw label (centered)
             label_surf = font.render(label, True, BLACK)
-            label_rect = label_surf.get_rect(center=(x + w/2, y + h/2 - 10))
+            label_rect = label_surf.get_rect(center=(x + w/2, y + h/2))
             screen.blit(label_surf, label_rect)
-
-            # Draw note (below label)
-            note_surf = small_font.render(note, True, BLACK)
-            note_rect = note_surf.get_rect(center=(x + w/2, y + h/2 + 20))
-            screen.blit(note_surf, note_rect)
 
         pygame.display.flip()
         clock.tick(60)
