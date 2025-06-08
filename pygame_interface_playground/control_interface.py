@@ -4,12 +4,14 @@ import sys
 pygame.init()
 
 # Setup screen
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 500, 500
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Keyboard Visualizer")
 
 # Fonts
-font = pygame.font.SysFont(None, 36)
+font_size = 36
+#font = pygame.font.SysFont(None, font_size)
+font = pygame.font.SysFont('Arial Unicode MS', font_size)
 small_font = pygame.font.SysFont(None, 24)
 big_font = pygame.font.SysFont(None, 48)
 
@@ -42,10 +44,10 @@ key_definitions = [
     (pygame.K_SPACE, 'SPACE', 'Hand Brake'),
     (pygame.K_ESCAPE, 'ESC', 'Exit'),
 
-    (pygame.K_UP, 'UP', 'Move Forward'),
-    (pygame.K_DOWN, 'DOWN', 'Brake'),
-    (pygame.K_LEFT, 'LEFT', 'Steer Left'),
-    (pygame.K_RIGHT, 'RIGHT', 'Steer Right'),
+    (pygame.K_UP, '^', 'Move Forward'),
+    (pygame.K_DOWN, 'v', 'Brake'),
+    (pygame.K_LEFT, '<', 'Steer Left'),
+    (pygame.K_RIGHT, '>', 'Steer Right'),
 ]
 
 # Keyboard grid positions → column, row
@@ -72,11 +74,11 @@ key_positions = {
     'SPACE': (4, 4),
     'ESC': (0, 0),  # top-left corner (fixed)
 
-    # Arrow keys layout
-    'UP': (12, 3.5),
-    'LEFT': (11.5, 4.5),
-    'DOWN': (12, 4.5),
-    'RIGHT': (12.5, 4.5),
+    # Arrow keys layout (right side)
+    '^': (12, 3),
+    '<': (11, 4),
+    'v': (12, 4),
+    '>': (13, 4),
 }
 
 # Layout parameters
@@ -84,7 +86,7 @@ key_width_frac = 0.06  # ~6% of screen width
 key_height_frac = 0.1  # ~10% of screen height
 h_spacing = 0.01  # horizontal spacing between keys
 v_spacing = 0.02  # vertical spacing between keys
-start_x_frac = 0.1  # starting x offset
+start_x_frac = 0.025  # starting x offset
 start_y_frac = 0.15  # starting y offset
 
 # Build final keys list with positions
