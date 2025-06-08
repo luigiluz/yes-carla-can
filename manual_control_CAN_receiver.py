@@ -73,6 +73,8 @@ except IndexError:
 import carla
 import pygame
 
+from can_network.network import CAN_Network
+
 from gui import HUD, World, KeyboardControl
 
 
@@ -81,6 +83,7 @@ def game_loop(args):
     pygame.font.init()
     world = None
     original_settings = None
+    can_bus = CAN_Network()
 
     try:
         client = carla.Client(args.host, args.port)
@@ -126,8 +129,6 @@ def game_loop(args):
             sim_world.wait_for_tick()
 
         clock = pygame.time.Clock()
-        can_bus = CAN_Network()
-
         while True:
             if args.sync:
                 sim_world.tick()
