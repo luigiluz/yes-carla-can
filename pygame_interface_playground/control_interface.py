@@ -10,7 +10,6 @@ pygame.display.set_caption("Keyboard Visualizer")
 
 # Fonts
 font_size = 36
-#font = pygame.font.SysFont(None, font_size)
 font = pygame.font.SysFont('Arial Unicode MS', font_size)
 small_font = pygame.font.SysFont(None, 24)
 big_font = pygame.font.SysFont(None, 48)
@@ -103,7 +102,7 @@ for key_code, label, note in key_definitions:
         else:
             w_frac = key_width_frac
 
-        keys.append((key_code, label, note, (x_frac, y_frac, key_width_frac, key_height_frac)))
+        keys.append((key_code, label, note, (x_frac, y_frac, w_frac, key_height_frac)))
     else:
         print(f"Warning: No position defined for key {label}")
 
