@@ -1,5 +1,6 @@
 import carla
 import tkinter as tk
+import time
 
 import can_network
 
@@ -59,6 +60,8 @@ class KeyboardSenderControl(object):
         self._control = carla.VehicleControl()
         self._ackermann_control = carla.VehicleAckermannControl()
         self._lights = carla.VehicleLightState.NONE
+        self._previous_time = 0
+        self._periodic_message_interval = 0.2
 
         self._steer_cache = 0.0
 
@@ -171,7 +174,10 @@ class KeyboardSenderControl(object):
             can_network.send_current_lights_msg(current_lights)
             self._lights = current_lights
 
-        can_network.send_msg(self._control)
+        current_time = time.time()
+        if current_time - self._previous_time > self._periodic_message_interval:
+            can_network.send_msg(self._control)
+            self._previous_time = current_time
 
     @staticmethod
     def _is_quit_shortcut(key):
