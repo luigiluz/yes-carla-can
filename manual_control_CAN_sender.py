@@ -168,9 +168,9 @@ class KeyboardSenderControl(object):
             current_lights &= ~carla.VehicleLightState.Reverse
 
         if self._lights != current_lights:
+            can_network.send_current_lights_msg(current_lights)
             self._lights = current_lights
 
-        can_network.send_current_lights_msg(current_lights)
         can_network.send_msg(self._control)
 
     @staticmethod
