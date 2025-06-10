@@ -4,7 +4,8 @@ import json
 def main():
     print("Analyzing CAN bus data")
 
-    df = pd.read_csv('candump_parsed.csv')
+    filename = "/home/luigi/workspace/nerd_for_speed/data/periodic_0.2_candump_parsed.csv"
+    df = pd.read_csv(filename)
     print(df.head(5))
     print(df.info())
 
@@ -28,13 +29,14 @@ def main():
         can_ids_statistics_dict[can_id] = {
             'mean_timestamp_diff': mean_diff,
             'std_timestamp_diff': std_diff,
-            "mgs_type": msg_type
+            "msg_type": msg_type
         }
 
     print(f"CAN IDs Statistics: {json.dumps(can_ids_statistics_dict, indent=4)}")
 
     # Export to JSON
-    with open('can_ids_statistics.json', 'w') as f:
+    filename = 'can_ids_statistics_periodic_0.2'
+    with open(f'{filename}.json', 'w') as f:
         json.dump(can_ids_statistics_dict, f, indent=4)
 
 
