@@ -1,54 +1,50 @@
 import carla
-from can_network.network import CAN_Network
 
+from can_network.network import CAN_Network
 
 try:
     import pygame
-    from pygame.locals import KMOD_CTRL
-    from pygame.locals import KMOD_SHIFT
-    from pygame.locals import K_0
-    from pygame.locals import K_9
-    from pygame.locals import K_BACKQUOTE
-    from pygame.locals import K_BACKSPACE
-    from pygame.locals import K_COMMA
-    from pygame.locals import K_DOWN
-    from pygame.locals import K_ESCAPE
-    from pygame.locals import K_F1
-    from pygame.locals import K_LEFT
-    from pygame.locals import K_PERIOD
-    from pygame.locals import K_RIGHT
-    from pygame.locals import K_SLASH
-    from pygame.locals import K_SPACE
-    from pygame.locals import K_TAB
-    from pygame.locals import K_UP
-    from pygame.locals import K_a
-    from pygame.locals import K_b
-    from pygame.locals import K_c
-    from pygame.locals import K_d
-    from pygame.locals import K_f
-    from pygame.locals import K_g
-    from pygame.locals import K_h
-    from pygame.locals import K_i
-    from pygame.locals import K_l
-    from pygame.locals import K_m
-    from pygame.locals import K_n
-    from pygame.locals import K_o
-    from pygame.locals import K_p
-    from pygame.locals import K_q
-    from pygame.locals import K_r
-    from pygame.locals import K_s
-    from pygame.locals import K_t
-    from pygame.locals import K_v
-    from pygame.locals import K_w
-    from pygame.locals import K_x
-    from pygame.locals import K_z
-    from pygame.locals import K_MINUS
-    from pygame.locals import K_EQUALS
+    from pygame.locals import (
+        K_0,
+        K_9,
+        K_BACKQUOTE,
+        K_BACKSPACE,
+        K_DOWN,
+        K_EQUALS,
+        K_ESCAPE,
+        K_F1,
+        K_LEFT,
+        K_MINUS,
+        K_RIGHT,
+        K_SLASH,
+        K_SPACE,
+        K_TAB,
+        K_UP,
+        KMOD_CTRL,
+        KMOD_SHIFT,
+        K_a,
+        K_b,
+        K_c,
+        K_d,
+        K_f,
+        K_g,
+        K_h,
+        K_n,
+        K_p,
+        K_q,
+        K_r,
+        K_s,
+        K_t,
+        K_v,
+        K_w,
+    )
 except ImportError:
-    raise RuntimeError('cannot import pygame, make sure pygame package is installed')
+    raise RuntimeError("cannot import pygame, make sure pygame package is installed")
+
 
 class KeyboardControl(object):
     """Class that handles keyboard input."""
+
     def __init__(self, world, start_in_autopilot):
         self._can = CAN_Network()
         self._autopilot_enabled = start_in_autopilot
@@ -95,7 +91,9 @@ class KeyboardControl(object):
                     world.load_map_layer(unload=True)
                 elif event.key == K_b:
                     world.load_map_layer()
-                elif event.key == K_h or (event.key == K_SLASH and pygame.key.get_mods() & KMOD_SHIFT):
+                elif event.key == K_h or (
+                    event.key == K_SLASH and pygame.key.get_mods() & KMOD_SHIFT
+                ):
                     world.hud.help.toggle()
                 elif event.key == K_TAB:
                     world.camera_manager.toggle_camera()
@@ -117,7 +115,9 @@ class KeyboardControl(object):
                     else:
                         world.player.enable_constant_velocity(carla.Vector3D(17, 0, 0))
                         world.constant_velocity_enabled = True
-                        world.hud.notification("Enabled Constant Velocity Mode at 60 km/h")
+                        world.hud.notification(
+                            "Enabled Constant Velocity Mode at 60 km/h"
+                        )
                 elif event.key == K_t:
                     if world.show_vehicle_telemetry:
                         world.player.show_debug_telemetry(False)
@@ -138,7 +138,7 @@ class KeyboardControl(object):
                 elif event.key == K_r and not (pygame.key.get_mods() & KMOD_CTRL):
                     world.camera_manager.toggle_recording()
                 elif event.key == K_r and (pygame.key.get_mods() & KMOD_CTRL):
-                    if (world.recording_enabled):
+                    if world.recording_enabled:
                         client.stop_recorder()
                         world.recording_enabled = False
                         world.hud.notification("Recorder is OFF")
@@ -158,35 +158,47 @@ class KeyboardControl(object):
                     world.player.set_autopilot(self._autopilot_enabled)
                     world.hud.notification("Replaying file 'manual_recording.rec'")
                     # replayer
-                    client.replay_file("manual_recording.rec", world.recording_start, 0, 0)
+                    client.replay_file(
+                        "manual_recording.rec", world.recording_start, 0, 0
+                    )
                     world.camera_manager.set_sensor(current_index)
                 elif event.key == K_MINUS and (pygame.key.get_mods() & KMOD_CTRL):
                     if pygame.key.get_mods() & KMOD_SHIFT:
                         world.recording_start -= 10
                     else:
                         world.recording_start -= 1
-                    world.hud.notification("Recording start time is %d" % (world.recording_start))
+                    world.hud.notification(
+                        "Recording start time is %d" % (world.recording_start)
+                    )
                 elif event.key == K_EQUALS and (pygame.key.get_mods() & KMOD_CTRL):
                     if pygame.key.get_mods() & KMOD_SHIFT:
                         world.recording_start += 10
                     else:
                         world.recording_start += 1
-                    world.hud.notification("Recording start time is %d" % (world.recording_start))
+                    world.hud.notification(
+                        "Recording start time is %d" % (world.recording_start)
+                    )
                 if isinstance(self._control, carla.VehicleControl):
                     if event.key == K_f:
                         # Toggle ackermann controller
                         self._ackermann_enabled = not self._ackermann_enabled
                         world.hud.show_ackermann_info(self._ackermann_enabled)
-                        world.hud.notification("Ackermann Controller %s" %
-                                               ("Enabled" if self._ackermann_enabled else "Disabled"))
+                        world.hud.notification(
+                            "Ackermann Controller %s"
+                            % ("Enabled" if self._ackermann_enabled else "Disabled")
+                        )
                     elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
                         if not self._autopilot_enabled and not sync_mode:
-                            print("WARNING: You are currently in asynchronous mode and could "
-                                  "experience some issues with the traffic simulation")
+                            print(
+                                "WARNING: You are currently in asynchronous mode and could "
+                                "experience some issues with the traffic simulation"
+                            )
                         self._autopilot_enabled = not self._autopilot_enabled
                         world.player.set_autopilot(self._autopilot_enabled)
                         world.hud.notification(
-                            'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
+                            "Autopilot %s"
+                            % ("On" if self._autopilot_enabled else "Off")
+                        )
 
         if not self._autopilot_enabled:
             if isinstance(self._control, carla.VehicleControl):
@@ -204,8 +216,10 @@ class KeyboardControl(object):
                     except Exception:
                         pass
 
-                world.hud.notification('%s Transmission' %
-                                           ('Manual' if self._control.manual_gear_shift else 'Automatic'))
+                world.hud.notification(
+                    "%s Transmission"
+                    % ("Manual" if self._control.manual_gear_shift else "Automatic")
+                )
 
                 if not self._lights & carla.VehicleLightState.Position:
                     world.hud.notification("Position lights")
@@ -218,7 +232,9 @@ class KeyboardControl(object):
 
                 current_lights = can_network.current_lights
 
-                if current_lights != self._lights:  # Change the light state only if necessary
+                if (
+                    current_lights != self._lights
+                ):  # Change the light state only if necessary
                     self._lights = current_lights
                     world.player.set_light_state(carla.VehicleLightState(self._lights))
                 ## Apply control
@@ -233,7 +249,9 @@ class KeyboardControl(object):
                     world.hud.update_ackermann_control(self._ackermann_control)
 
             elif isinstance(self._control, carla.WalkerControl):
-                self._parse_walker_keys(pygame.key.get_pressed(), clock.get_time(), world)
+                self._parse_walker_keys(
+                    pygame.key.get_pressed(), clock.get_time(), world
+                )
                 world.player.apply_control(self._control)
 
     def _parse_vehicle_keys(self, keys, milliseconds):
@@ -241,7 +259,9 @@ class KeyboardControl(object):
             if not self._ackermann_enabled:
                 self._control.throttle = min(self._control.throttle + 0.1, 1.00)
             else:
-                self._ackermann_control.speed += round(milliseconds * 0.005, 2) * self._ackermann_reverse
+                self._ackermann_control.speed += (
+                    round(milliseconds * 0.005, 2) * self._ackermann_reverse
+                )
         else:
             if not self._ackermann_enabled:
                 self._control.throttle = 0.0
@@ -250,8 +270,16 @@ class KeyboardControl(object):
             if not self._ackermann_enabled:
                 self._control.brake = min(self._control.brake + 0.2, 1)
             else:
-                self._ackermann_control.speed -= min(abs(self._ackermann_control.speed), round(milliseconds * 0.005, 2)) * self._ackermann_reverse
-                self._ackermann_control.speed = max(0, abs(self._ackermann_control.speed)) * self._ackermann_reverse
+                self._ackermann_control.speed -= (
+                    min(
+                        abs(self._ackermann_control.speed),
+                        round(milliseconds * 0.005, 2),
+                    )
+                    * self._ackermann_reverse
+                )
+                self._ackermann_control.speed = (
+                    max(0, abs(self._ackermann_control.speed)) * self._ackermann_reverse
+                )
         else:
             if not self._ackermann_enabled:
                 self._control.brake = 0
@@ -281,13 +309,17 @@ class KeyboardControl(object):
         if keys[K_DOWN] or keys[K_s]:
             self._control.speed = 0.0
         if keys[K_LEFT] or keys[K_a]:
-            self._control.speed = .01
+            self._control.speed = 0.01
             self._rotation.yaw -= 0.08 * milliseconds
         if keys[K_RIGHT] or keys[K_d]:
-            self._control.speed = .01
+            self._control.speed = 0.01
             self._rotation.yaw += 0.08 * milliseconds
         if keys[K_UP] or keys[K_w]:
-            self._control.speed = world.player_max_speed_fast if pygame.key.get_mods() & KMOD_SHIFT else world.player_max_speed
+            self._control.speed = (
+                world.player_max_speed_fast
+                if pygame.key.get_mods() & KMOD_SHIFT
+                else world.player_max_speed
+            )
         self._control.jump = keys[K_SPACE]
         self._rotation.yaw = round(self._rotation.yaw, 1)
         self._control.direction = self._rotation.get_forward_vector()

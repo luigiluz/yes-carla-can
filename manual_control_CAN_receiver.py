@@ -56,27 +56,33 @@ Use ARROWS or WASD keys for control.
 
 from __future__ import print_function
 
+import argparse
 import glob
+import logging
 import os
 import sys
-import argparse
-import logging
 
 try:
-    sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
-        sys.version_info.major,
-        sys.version_info.minor,
-        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
+    sys.path.append(
+        glob.glob(
+            "../carla/dist/carla-*%d.%d-%s.egg"
+            % (
+                sys.version_info.major,
+                sys.version_info.minor,
+                "win-amd64" if os.name == "nt" else "linux-x86_64",
+            )
+        )[0]
+    )
 except IndexError:
     pass
 
-import carla
-import pygame
 import tkinter as tk
 
-from can_network.network import CAN_Network
+import carla
+import pygame
 
-from gui import HUD, World, KeyboardControl
+from can_network.network import CAN_Network
+from gui import HUD, KeyboardControl, World
 
 
 def game_loop(args):
@@ -100,11 +106,10 @@ def game_loop(args):
         # Disable rendering and set fixed time step
         sim_world = client.get_world()
         world_settings = sim_world.get_settings()
-        world_settings.no_rendering_mode = True # Disable rendering
-        #fps = 30
-        #world_settings.fixed_delta_seconds = round(1/fps, 2) # Set FPS
+        world_settings.no_rendering_mode = True  # Disable rendering
+        # fps = 30
+        # world_settings.fixed_delta_seconds = round(1/fps, 2) # Set FPS
         sim_world.apply_settings(world_settings)
-
 
         if args.sync:
             original_settings = sim_world.get_settings()
@@ -118,16 +123,18 @@ def game_loop(args):
             traffic_manager.set_synchronous_mode(True)
 
         if args.autopilot and not sim_world.get_settings().synchronous_mode:
-            print("WARNING: You are currently in asynchronous mode and could "
-                  "experience some issues with the traffic simulation")
+            print(
+                "WARNING: You are currently in asynchronous mode and could "
+                "experience some issues with the traffic simulation"
+            )
 
         display = pygame.display.set_mode(
-            (width/2, height/2),
-            pygame.HWSURFACE | pygame.DOUBLEBUF)
-        display.fill((0,0,0))
+            (width / 2, height / 2), pygame.HWSURFACE | pygame.DOUBLEBUF
+        )
+        display.fill((0, 0, 0))
         pygame.display.flip()
 
-        hud = HUD(width/2, height/2)
+        hud = HUD(width / 2, height / 2)
         world = World(sim_world, hud, args)
         controller = KeyboardControl(world, args.autopilot)
 
@@ -148,11 +155,10 @@ def game_loop(args):
             pygame.display.flip()
 
     finally:
-
         if original_settings:
             sim_world.apply_settings(original_settings)
 
-        if (world and world.recording_enabled):
+        if world and world.recording_enabled:
             client.stop_recorder()
 
         if world is not None:
@@ -162,72 +168,79 @@ def game_loop(args):
 
 
 def main():
-    argparser = argparse.ArgumentParser(
-        description='CARLA Manual Control Client')
+    argparser = argparse.ArgumentParser(description="CARLA Manual Control Client")
     argparser.add_argument(
-        '-v', '--verbose',
-        action='store_true',
-        dest='debug',
-        help='print debug information')
+        "-v",
+        "--verbose",
+        action="store_true",
+        dest="debug",
+        help="print debug information",
+    )
     argparser.add_argument(
-        '--host',
-        metavar='H',
-        default='127.0.0.1',
-        help='IP of the host server (default: 127.0.0.1)')
+        "--host",
+        metavar="H",
+        default="127.0.0.1",
+        help="IP of the host server (default: 127.0.0.1)",
+    )
     argparser.add_argument(
-        '-p', '--port',
-        metavar='P',
+        "-p",
+        "--port",
+        metavar="P",
         default=2000,
         type=int,
-        help='TCP port to listen to (default: 2000)')
+        help="TCP port to listen to (default: 2000)",
+    )
     argparser.add_argument(
-        '-a', '--autopilot',
-        action='store_true',
-        help='enable autopilot')
+        "-a", "--autopilot", action="store_true", help="enable autopilot"
+    )
     argparser.add_argument(
-        '--res',
-        metavar='WIDTHxHEIGHT',
-        default='1280x720',
-        help='window resolution (default: 1280x720)')
+        "--res",
+        metavar="WIDTHxHEIGHT",
+        default="1280x720",
+        help="window resolution (default: 1280x720)",
+    )
     argparser.add_argument(
-        '--filter',
-        metavar='PATTERN',
-        default='vehicle.*',
-        help='actor filter (default: "vehicle.*")')
+        "--filter",
+        metavar="PATTERN",
+        default="vehicle.*",
+        help='actor filter (default: "vehicle.*")',
+    )
     argparser.add_argument(
-        '--generation',
-        metavar='G',
-        default='2',
-        help='restrict to certain actor generation (values: "1","2","All" - default: "2")')
+        "--generation",
+        metavar="G",
+        default="2",
+        help='restrict to certain actor generation (values: "1","2","All" - default: "2")',
+    )
     argparser.add_argument(
-        '--rolename',
-        metavar='NAME',
-        default='hero',
-        help='actor role name (default: "hero")')
+        "--rolename",
+        metavar="NAME",
+        default="hero",
+        help='actor role name (default: "hero")',
+    )
     argparser.add_argument(
-        '--gamma',
+        "--gamma",
         default=2.2,
         type=float,
-        help='Gamma correction of the camera (default: 2.2)')
+        help="Gamma correction of the camera (default: 2.2)",
+    )
     argparser.add_argument(
-        '--sync',
-        action='store_true',
-        help='Activate synchronous mode execution')
+        "--sync", action="store_true", help="Activate synchronous mode execution"
+    )
     args = argparser.parse_args()
 
-    args.width, args.height = [int(x) for x in args.res.split('x')]
+    args.width, args.height = [int(x) for x in args.res.split("x")]
 
     log_level = logging.DEBUG if args.debug else logging.INFO
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
-    logging.info('listening to server %s:%s', args.host, args.port)
+    logging.basicConfig(format="%(levelname)s: %(message)s", level=log_level)
+    logging.info("listening to server %s:%s", args.host, args.port)
 
     print(__doc__)
 
     try:
         game_loop(args)
     except KeyboardInterrupt:
-        print('\nCancelled by user. Bye!')
+        print("\nCancelled by user. Bye!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
