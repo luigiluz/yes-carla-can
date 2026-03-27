@@ -249,14 +249,12 @@ def keyboard_parser_loop():
     height = root.winfo_screenheight()
     root.destroy()
     print(f"width: {width}, height: {height}")
-    WIDTH = int(width / 2)
-    HEIGHT = int(0.8 * int(height / 2))
+    WIDTH = int(width * 0.45)
+    HEIGHT = int(height * 0.33)
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-    font_size = 36
-    font = pygame.font.SysFont("Arial Unicode MS", font_size)
-    big_font = pygame.font.SysFont(None, 48)
-
+    # Interface related
+    # Colors
     WHITE = (255, 255, 255)
     BLACK = (0, 0, 0)
     GRAY = (200, 200, 200)
@@ -309,12 +307,35 @@ def keyboard_parser_loop():
         ">": (13, 4),
     }
 
-    key_width_frac = 0.06
-    key_height_frac = 0.1
-    h_spacing = 0.01
-    v_spacing = 0.02
-    start_x_frac = 0.025
-    start_y_frac = 0.15
+    # Layout parameters — derived from the grid extents so keys always fill the window
+    margin_x = 0.01
+    margin_y = 0.02
+    top_bar_frac = 0.18  # fraction of height reserved for the top info bar
+
+    max_col = max(col for col, row in key_positions.values())  # rightmost column index
+    max_row = max(row for col, row in key_positions.values())  # bottommost row index
+    h_spacing_ratio = 0.15  # gap as a fraction of key width
+    v_spacing_ratio = 0.15  # gap as a fraction of key height
+
+    # Solve: available_width  = (max_col+1) * key_w + max_col * h_gap
+    #                         = key_w * ((max_col+1) + max_col * h_spacing_ratio)
+    key_width_frac = (1.0 - 2 * margin_x) / ((max_col + 1) + max_col * h_spacing_ratio)
+    h_spacing = key_width_frac * h_spacing_ratio
+
+    # Solve: available_height = (max_row+1) * key_h + max_row * v_gap
+    key_height_frac = (1.0 - top_bar_frac - margin_y) / ((max_row + 1) + max_row * v_spacing_ratio)
+    v_spacing = key_height_frac * v_spacing_ratio
+
+    start_x_frac = margin_x
+    start_y_frac = top_bar_frac
+
+    # Derive font sizes from actual key pixel dimensions
+    key_h_px = int(key_height_frac * HEIGHT)
+    key_w_px = int(key_width_frac * WIDTH)
+    font_size = max(10, int(min(key_h_px, key_w_px) * 0.55))
+    font = pygame.font.SysFont("Arial Unicode MS", font_size)
+    big_font_size = max(10, int(HEIGHT * top_bar_frac * 0.45))
+    big_font = pygame.font.SysFont(None, big_font_size)
 
     keys = []
     for key_code, label, note in key_definitions:
@@ -334,10 +355,11 @@ def keyboard_parser_loop():
 
     screen.fill(BLACK)
 
-    top_rect_w = WIDTH * 0.6
-    top_rect_h = HEIGHT * 0.1
+    # Draw the top note rectangle
+    top_rect_w = WIDTH * 0.5
+    top_rect_h = HEIGHT * (top_bar_frac * 0.7)
     top_rect_x = (WIDTH - top_rect_w) // 2
-    top_rect_y = HEIGHT * 0.03
+    top_rect_y = int(HEIGHT * (top_bar_frac * 0.1))
 
     pygame.draw.rect(
         screen,
@@ -362,6 +384,9 @@ def keyboard_parser_loop():
         label_rect = label_surf.get_rect(center=(x + w / 2, y + h / 2))
         screen.blit(label_surf, label_rect)
 
+    # Flush the initial drawing to screen before any potentially-blocking CAN init
+    pygame.display.flip()
+
     can_net = can_network.CAN_Network()
     controller = KeyboardSenderControl(can_net, dbc_path=DBC_PATH)
     clock = pygame.time.Clock()
@@ -370,11 +395,57 @@ def keyboard_parser_loop():
     while running:
         clock.tick_busy_loop(60)
         controller.parse_events(clock, can_net)
+
+        # Redraw keys to reflect current pressed state
+        for key_code, label, note, rect_frac in keys:
+            x_frac, y_frac, w_frac, h_frac = rect_frac
+            x = int(x_frac * WIDTH)
+            y = int(y_frac * HEIGHT)
+            w = int(w_frac * WIDTH)
+            h = int(h_frac * HEIGHT)
+            pressed_state[key_code] = pygame.key.get_pressed()[key_code]
+            color = GREEN if pressed_state[key_code] else GRAY
+            pygame.draw.rect(screen, color, (x, y, w, h), border_radius=8)
+            label_surf = font.render(label, True, BLACK)
+            label_rect = label_surf.get_rect(center=(x + w / 2, y + h / 2))
+            screen.blit(label_surf, label_rect)
+
         pygame.display.flip()
+
+
+def print_key_bindings():
+    bindings = [
+        ("W / ↑",       "Throttle (hold)"),
+        ("S / ↓",       "Brake (hold)"),
+        ("A / ←",       "Steer left (hold)"),
+        ("D / →",       "Steer right (hold)"),
+        ("SPACE",        "Hand brake (hold)"),
+        ("Q",            "Toggle reverse gear"),
+        ("M",            "Toggle manual gear shift"),
+        (", (comma)",    "Gear down  [manual mode]"),
+        (". (period)",   "Gear up    [manual mode]"),
+        ("O",            "Toggle door open/close"),
+        ("L",            "Cycle lights: off → position → low beam → fog"),
+        ("Shift + L",    "Toggle high beam"),
+        ("Ctrl  + L",    "Toggle special light 1"),
+        ("I",            "Toggle interior light"),
+        ("Z",            "Toggle left blinker"),
+        ("X",            "Toggle right blinker"),
+        ("ESC / Ctrl+Q", "Quit"),
+    ]
+    col_w = max(len(k) for k, _ in bindings) + 2
+    print()
+    print("  CAN Sender — Key Bindings")
+    print("  " + "─" * (col_w + 40))
+    for key, desc in bindings:
+        print(f"  {key:<{col_w}} {desc}")
+    print("  " + "─" * (col_w + 40))
+    print()
 
 
 def main():
     print("Sending commands through CAN bus")
+    print_key_bindings()
     try:
         keyboard_parser_loop()
     except KeyboardInterrupt:
