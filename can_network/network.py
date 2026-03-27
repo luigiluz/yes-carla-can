@@ -2,15 +2,8 @@ import can
 import cantools
 import carla
 
-import can_network.constants as consts
-import can_network.utils as utils
-from can_network.comm_matrix import (
-    CAN_COMMUNICATION_MATRIX_DICT,
-)
-
 
 class CAN_Network(object):
-    # door_update_state_msg = False
     door_change_state = False
     current_lights = carla.VehicleLightState.NONE
 
@@ -21,179 +14,140 @@ class CAN_Network(object):
         self.recvd_controls = carla.VehicleControl()
         self.db = cantools.database.load_file("data/carla.dbc")
 
-    # As variaveis que vem de controls podem ser encontradas aqui:
-    # https://carla.readthedocs.io/en/latest/python_api/#carlavehiclecontrol
-    def send_switch_door_state_msg(self):
-        door_msg = self.db.get_message_by_name("DOORS")
-        msg = can.Message(
-            arbitration_id=door_msg.frame_id,
-            data=door_msg.encode({"DOORS_signal": True}),
-            is_extended_id=door_msg.is_extended_frame,
+    # ------------------------------------------------------------------
+    # Internal helper
+    # ------------------------------------------------------------------
+
+    def _build_msg(self, message_name, signal_values: dict) -> can.Message:
+        """Encode a CAN message from the DBC and return a can.Message ready to send."""
+        dbc_msg = self.db.get_message_by_name(message_name)
+        return can.Message(
+            arbitration_id=dbc_msg.frame_id,
+            data=dbc_msg.encode(signal_values),
+            is_extended_id=dbc_msg.is_extended_frame,
         )
-        self.bus.send(msg)
+
+    # ------------------------------------------------------------------
+    # Senders
+    # ------------------------------------------------------------------
+
+    def send_switch_door_state_msg(self):
+        self.bus.send(self._build_msg("DOORS", {"DOORS_signal": True}))
 
     def send_current_lights_msg(self, lights):
-        msg_data = utils.int_to_hex_array(lights)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.GENERAL_LIGHTS_KEY][
-                consts.CAN_ID_KEY
-            ],
-            data=msg_data,
-            is_extended_id=False,
+        self.bus.send(
+            self._build_msg("GENERAL_LIGHTS", {"GENERAL_LIGHTS_signal": int(lights)})
         )
-        self.bus.send(msg)
+
+    def send_throttle_msg(self, controls):
+        self.bus.send(
+            self._build_msg(
+                "THROTTLE", {"THROTTLE_signal": int(controls.throttle * 255)}
+            )
+        )
+
+    def send_steer_msg(self, controls):
+        self.bus.send(
+            self._build_msg(
+                "STEER", {"STEER_signal": int((controls.steer + 1) / 2 * 255)}
+            )
+        )
+
+    def send_brake_msg(self, controls):
+        self.bus.send(
+            self._build_msg("BRAKE", {"BRAKE_signal": int(controls.brake * 255)})
+        )
+
+    def send_hand_brake_msg(self, controls):
+        self.bus.send(
+            self._build_msg(
+                "HAND_BRAKE", {"HAND_BRAKE_signal": int(controls.hand_brake)}
+            )
+        )
+
+    def send_reverse_msg(self, controls):
+        self.bus.send(
+            self._build_msg("REVERSE", {"REVERSE_signal": int(controls.reverse)})
+        )
+
+    def send_manual_transmission_msg(self, controls):
+        self.bus.send(
+            self._build_msg(
+                "MANUAL_TRANSMISSION",
+                {"MANUAL_TRANSMISSION_signal": int(controls.manual_gear_shift)},
+            )
+        )
+
+    def send_gear_msg(self, controls):
+        self.bus.send(self._build_msg("GEAR", {"GEAR_signal": int(controls.gear)}))
+
+    def send_autopilot_msg(self, controls):
+        # controls.autopilot is not a standard VehicleControl field;
+        # adapt the value source here if you have an autopilot state elsewhere.
+        pass
+
+    def send_msg(self, controls):
+        """Convenience method — sends all messages at once (bypasses per-message timing)."""
+        self.send_throttle_msg(controls)
+        self.send_steer_msg(controls)
+        self.send_brake_msg(controls)
+        self.send_hand_brake_msg(controls)
+        self.send_reverse_msg(controls)
+        self.send_manual_transmission_msg(controls)
+        self.send_gear_msg(controls)
+
+    # ------------------------------------------------------------------
+    # Receivers
+    # ------------------------------------------------------------------
 
     def recv_switch_door_state_msg(self):
         self.door_change_state = not self.door_change_state
         return self.door_change_state
-
-    def send_msg(self, controls):
-        # Throttle msg (float)
-        msg_data = utils.float_to_hex_array(controls.throttle)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.THROTTLE_KEY][
-                consts.CAN_ID_KEY
-            ],
-            data=msg_data,
-            is_extended_id=False,
-        )
-        self.bus.send(msg)
-
-        # Steer msg (float)
-        msg_data = utils.float_to_hex_array(controls.steer)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.STEER_KEY][
-                consts.CAN_ID_KEY
-            ],
-            data=msg_data,
-            is_extended_id=False,
-        )
-        self.bus.send(msg)
-
-        # Brake msg (float)
-        msg_data = utils.float_to_hex_array(controls.brake)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.BRAKE_KEY][
-                consts.CAN_ID_KEY
-            ],
-            data=msg_data,
-            is_extended_id=False,
-        )
-        self.bus.send(msg)
-
-        # FIXME: Hand brake msg (bool)
-        msg_data = utils.bool_to_hex_array(controls.hand_brake)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.HAND_BRAKE_KEY][
-                consts.CAN_ID_KEY
-            ],
-            data=msg_data,
-            is_extended_id=False,
-        )
-        self.bus.send(msg)
-
-        # FIXME: Reverse msg (bool)
-        msg_data = utils.bool_to_hex_array(controls.reverse)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.REVERSE_KEY][
-                consts.CAN_ID_KEY
-            ],
-            data=msg_data,
-            is_extended_id=False,
-        )
-        self.bus.send(msg)
-
-        # FIXME: Manual gear shift msg (bool)
-        msg_data = utils.bool_to_hex_array(controls.manual_gear_shift)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[
-                consts.MANUAL_TRANSMISSION_KEY
-            ][consts.CAN_ID_KEY],
-            data=msg_data,
-            is_extended_id=False,
-        )
-        self.bus.send(msg)
-
-        # FIXME: Gear msg (int)
-        msg_data = utils.int_to_hex_array(controls.gear)
-        msg = can.Message(
-            arbitration_id=CAN_COMMUNICATION_MATRIX_DICT[consts.GEAR_KEY][
-                consts.CAN_ID_KEY
-            ],
-            data=msg_data,
-            is_extended_id=False,
-        )
-        self.bus.send(msg)
 
     def recv_msg(self):
         recv_msg = self.bus.recv(timeout=0)
         while recv_msg is not None:
             data = self.db.decode_message(recv_msg.arbitration_id, recv_msg.data)
 
-            if (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.THROTTLE_KEY][consts.CAN_ID_KEY]
-            ):
-                self.recvd_controls.throttle = utils.hex_array_to_float(recv_msg.data)
+            try:
+                dbc_msg = self.db.get_message_by_frame_id(recv_msg.arbitration_id)
+            except KeyError:
+                recv_msg = self.bus.recv(timeout=0)
+                continue
 
-            elif (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.STEER_KEY][consts.CAN_ID_KEY]
-            ):
-                self.recvd_controls.steer = utils.hex_array_to_float(recv_msg.data)
+            name = dbc_msg.name
 
-            elif (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.BRAKE_KEY][consts.CAN_ID_KEY]
-            ):
-                self.recvd_controls.brake = utils.hex_array_to_float(recv_msg.data)
+            if name == "THROTTLE":
+                self.recvd_controls.throttle = data["THROTTLE_signal"] / 255.0
 
-            elif (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.HAND_BRAKE_KEY][
-                    consts.CAN_ID_KEY
-                ]
-            ):
-                self.recvd_controls.hand_brake = utils.hex_array_to_bool(recv_msg.data)
+            elif name == "STEER":
+                self.recvd_controls.steer = (data["STEER_signal"] / 255.0) * 2 - 1
 
-            elif (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.REVERSE_KEY][consts.CAN_ID_KEY]
-            ):
-                self.recvd_controls.reverse = utils.hex_array_to_bool(recv_msg.data)
+            elif name == "BRAKE":
+                self.recvd_controls.brake = data["BRAKE_signal"] / 255.0
 
-            elif (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.MANUAL_TRANSMISSION_KEY][
-                    consts.CAN_ID_KEY
-                ]
-            ):
-                self.recvd_controls.manual_gear_shift = utils.hex_array_to_bool(
-                    recv_msg.data
+            elif name == "HAND_BRAKE":
+                self.recvd_controls.hand_brake = bool(data["HAND_BRAKE_signal"])
+
+            elif name == "REVERSE":
+                self.recvd_controls.reverse = bool(data["REVERSE_signal"])
+
+            elif name == "MANUAL_TRANSMISSION":
+                self.recvd_controls.manual_gear_shift = bool(
+                    data["MANUAL_TRANSMISSION_signal"]
                 )
 
-            elif (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.GEAR_KEY][consts.CAN_ID_KEY]
-            ):
-                self.recvd_controls.gear = utils.hex_array_to_int(recv_msg.data)
+            elif name == "GEAR":
+                self.recvd_controls.gear = int(data["GEAR_signal"])
 
-            elif (
-                recv_msg.arbitration_id == self.db.get_message_by_name("DOORS").frame_id
-            ):
-                if utils.hex_array_to_bool(recv_msg.data):
+            elif name == "DOORS":
+                if data["DOORS_signal"]:
                     print(data)
-                    print(data["DOORS_signal"])
                     self.door_change_state = True
 
-            elif (
-                recv_msg.arbitration_id
-                == CAN_COMMUNICATION_MATRIX_DICT[consts.GENERAL_LIGHTS_KEY][
-                    consts.CAN_ID_KEY
-                ]
-            ):
+            elif name == "GENERAL_LIGHTS":
                 self.current_lights = carla.VehicleLightState(
-                    utils.hex_array_to_int(recv_msg.data)
+                    int(data["GENERAL_LIGHTS_signal"])
                 )
 
             recv_msg = self.bus.recv(timeout=0)
