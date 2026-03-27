@@ -35,8 +35,12 @@ class CAN_Network(object):
         self.bus.send(self._build_msg("DOORS", {"DOORS_signal": True}))
 
     def send_current_lights_msg(self, lights):
+        # GENERAL_LIGHTS_signal is 8-bit (0-255). VehicleLightState values above
+        # 0xFF (Interior=256, Special1=512) are carla-only and not in the DBC,
+        # so mask them out before encoding.
+        value = int(lights) & 0xFF
         self.bus.send(
-            self._build_msg("GENERAL_LIGHTS", {"GENERAL_LIGHTS_signal": int(lights)})
+            self._build_msg("GENERAL_LIGHTS", {"GENERAL_LIGHTS_signal": value})
         )
 
     def send_throttle_msg(self, controls):
