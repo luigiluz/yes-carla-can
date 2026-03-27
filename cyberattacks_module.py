@@ -3,7 +3,7 @@ import can
 import time
 import random
 
-from reverse_engineering import FEATURE_CAN_ID_PAYLOAD_MAPPER
+from attacks.reverse_engineering import FEATURE_CAN_ID_PAYLOAD_MAPPER
 
 def denial_of_service_func(bus, period: float):
     while True:

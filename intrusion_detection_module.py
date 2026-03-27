@@ -1,13 +1,13 @@
 import argparse
 import can
 from pathlib import Path
-from id_time_intrusion_detection import IdTimeIntrusionDetection
+from defense.id_time_intrusion_detection import IdTimeIntrusionDetection
 
 DETECTOR_FACTORY = {
     "id_time": IdTimeIntrusionDetection
 }
 
-DATA_PATH = Path(__file__).parent.parent / "data" / "can_ids_statistics_periodic_0.2.json"
+DATA_PATH = Path(__file__).parent / "data" / "can_ids_statistics_periodic_0.2.json"
 
 def main():
     print("Intrusion Detection System for CAN Bus")
