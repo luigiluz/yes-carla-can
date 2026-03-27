@@ -173,3 +173,7 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Donwloaded CARLA simulator files
+carla-0-9-15/**
+carla-0-9-15.tar.gz
