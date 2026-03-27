@@ -1,10 +1,13 @@
 import argparse
 import can
+from pathlib import Path
 from id_time_intrusion_detection import IdTimeIntrusionDetection
 
 DETECTOR_FACTORY = {
     "id_time": IdTimeIntrusionDetection
 }
+
+DATA_PATH = Path(__file__).parent.parent / "data" / "can_ids_statistics_periodic_0.2.json"
 
 def main():
     print("Intrusion Detection System for CAN Bus")
@@ -15,7 +18,7 @@ def main():
     args = parser.parse_args()
 
     selected_detector = DETECTOR_FACTORY[args.detector]()
-    selected_detector.load("/home/luigi/workspace/nerd_for_speed/data/can_ids_statistics_periodic_0.2.json")
+    selected_detector.load(DATA_PATH)
     bus = can.interface.Bus(channel='vcan0', interface='socketcan')
 
     try:
