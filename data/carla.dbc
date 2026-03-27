@@ -63,3 +63,18 @@ BO_ 1548 DOORS: 1 ECU
 BO_ 1549 GENERAL_LIGHTS: 4 ECU
  SG_ GENERAL_LIGHTS_signal : 0|8@1+ (1,0) [0|255] ""  ECU
 
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
+
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+
+BA_ "GenMsgCycleTime" BO_ 1536 100;
+BA_ "GenMsgCycleTime" BO_ 1537 100;
+BA_ "GenMsgCycleTime" BO_ 1538 100;
+BA_ "GenMsgCycleTime" BO_ 1539 200;
+BA_ "GenMsgCycleTime" BO_ 1540 200;
+BA_ "GenMsgCycleTime" BO_ 1541 500;
+BA_ "GenMsgCycleTime" BO_ 1542 500;
+BA_ "GenMsgCycleTime" BO_ 1543 200;
+BA_ "GenMsgCycleTime" BO_ 1548 0;
+BA_ "GenMsgCycleTime" BO_ 1549 0;
+
