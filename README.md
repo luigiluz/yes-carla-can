@@ -35,7 +35,7 @@ The modules in execution will look like the ones in the following image:
 
 ## Dependencies
 
-Yes, CARLA CAN depends on the following software components:
+"Yes, CARLA CAN" depends on the following software components:
 
 | Dependency | Purpose |
 |---|---|
@@ -51,6 +51,8 @@ However, you do **NOT** need to install these manually. We provide a shell scrip
 
 Run the install script once. It will handle everything, prompting you only if Miniconda is not yet present:
 
+> **Disclaimer:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or Macbooks was not tested.
+
 ```bash
 bash 0_install_dependencies.sh
 ```
@@ -63,8 +65,6 @@ What the script does:
 5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
 
 > **Screenshot suggestion:** A terminal recording (or screenshot) of the script running successfully, ending with the `"CARLA installed successfully!"` message, would be a useful reference for reproducibility.
-
-> **Disclaimer:** All experiments were conducted on Ubuntu/Debian. Behaviour on Windows/WSL was not tested.
 
 >
 > | Script | Purpose |
@@ -122,6 +122,61 @@ Once dependencies are installed and the DBC file specified, a single script star
 bash 1_up_environment.sh
 ```
 
+You should see an output like the following, meaning that the environment was properly brought up:
+
+```bash
+Starting CARLA simulator...
+Setting up virtual CAN bus...
+Waiting for CARLA to start...
+4.26.2-0+++UE4+Release-4.26 522 0
+Disabling core dumps.
+Starting CARLA client module...
+Starting vehicle controls module...
+Environment is up!
+```
+
+After a few seconds, the keyboard and CARLA client window will properly appear.
+
+#### Possible issues
+
+<details>
+<summary><strong>Check if virtualCAN was properly set up</strong></summary>
+
+You can verify that the virtual CAN interface was created successfully:
+
+```bash
+ifconfig
+```
+
+`vcan0` should appear in the list of network interfaces:
+
+<p align="center">
+  <img src="images/ifconfig_vcan0.png" alt="ifconfig output showing vcan0">
+</p>
+
+</details>
+
+<details>
+<summary><strong>Vulkan configuration (if the simulator fails to start)</strong></summary>
+
+On some Ubuntu systems, CARLA may not start correctly due to graphics driver issues. Install and configure Vulkan to resolve this:
+
+```bash
+vkconfig
+```
+
+Select the configuration shown below:
+
+<p align="center">
+  <img src="images/vulkan_config_highlighted.png" alt="Vulkan configuration">
+</p>
+
+Close `vkconfig` and re-run `1_up_environment.sh`.
+
+</details>
+
+<br>
+
 Internally, the script:
 1. Launches the **CARLA simulator** in headless, low-quality mode (`-RenderOffScreen -quality_level=Low`) to minimise resource usage.
 2. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module.
@@ -158,6 +213,23 @@ bash 2_down_environment.sh
 ```
 
 The script stops the vehicle controls module, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, and finally removes `vcan0` and unloads the `vcan` kernel module.
+
+You should see an output like the following, meaning that the environment was properly brought down:
+
+```bash
+./2_down_environment.sh
+Stopping vehicle controls module...
+vehicle_controls_module (PID 10272 10291) stopped.
+Stopping CARLA client module...
+Waiting for CARLA_client_module (PID 10271 10292) to exit...
+CARLA_client_module (PID 10271 10292) stopped.
+Stopping CARLA simulator...
+CARLA (PID 10158 10169) stopped.
+FUnixPlatformMisc::RequestExitWithStatus
+FUnixPlatformMisc::RequestExit
+Bringing virtual CAN bus down...
+Environment is down!
+```
 
 ---
 
@@ -304,35 +376,26 @@ Additionally, you can also watch the video demo of the intrusion detection durin
 
 ### Collecting network traffic
 
-## Common issues
-
-### Check if virtualCAN was properly set up
-
-You can verify that the virtual CAN interface was created successfully:
+Another benefit of having an integrated virtual CAN bus besides seing the practical effect of messages communication and the direct impact in the simulated vehicle, is to be able to store the CAN traffic log for further analysis. For that, we can use the built-in functionality of the can-utils package and run the following command:
 
 ```bash
-ifconfig
+candump -l vcan0
 ```
 
-`vcan0` should appear in the list of network interfaces:
-
-<p align="center">
-  <img src="images/ifconfig_vcan0.png" alt="ifconfig output showing vcan0">
-</p>
-
-
-### Vulkan configuration (if the simulator fails to start)
-
-On some Ubuntu systems, CARLA may not start correctly due to graphics driver issues. Install and configure Vulkan to resolve this:
+This command will output the logs to a file with the following name format 'candump-YYYY-MM-DD_HHMMSS.log', like the one down below:
 
 ```bash
-vkconfig
+cat candump-2026-03-28_133445.log
+(1774715685.861121) vcan0 606#00
+(1774715685.877301) vcan0 600#00000000
+(1774715685.877363) vcan0 601#00000000
+(1774715685.877398) vcan0 602#7F000000
+(1774715685.941147) vcan0 603#01
+(1774715685.941226) vcan0 604#00
 ```
 
-Select the configuration shown below:
+Such log files can be further use for applications such as network traffic load analysis and development of machine learning-based intrusion detection systems. For future work, we aim to generate automatically labeled log dumps to facilitate the usage in machine learning project settings.
 
-<p align="center">
-  <img src="images/vulkan_config_highlighted.png" alt="Vulkan configuration">
-</p>
+---
 
-Close `vkconfig` and re-run `1_up_environment.sh`.
+This work was submitted for the Salão de Ferraments of Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos 2026 and is currently under revision.
