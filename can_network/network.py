@@ -109,7 +109,10 @@ class CAN_Network(object):
         return self.door_change_state
 
     def recv_msg(self):
-        recv_msg = self.bus.recv(timeout=0)
+        try:
+            recv_msg = self.bus.recv(timeout=0)
+        except can.CanOperationError:
+            return self.recvd_controls
         while recv_msg is not None:
             data = self.db.decode_message(recv_msg.arbitration_id, recv_msg.data)
 
@@ -154,6 +157,9 @@ class CAN_Network(object):
                     int(data["GENERAL_LIGHTS_signal"])
                 )
 
-            recv_msg = self.bus.recv(timeout=0)
+            try:
+                recv_msg = self.bus.recv(timeout=0)
+            except can.CanOperationError:
+                break
 
         return self.recvd_controls
