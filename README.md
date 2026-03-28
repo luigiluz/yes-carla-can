@@ -45,7 +45,7 @@ The modules in execution will look like the ones in the following image:
 | **CARLA 0.9.15** | Autonomous driving simulator (server) |
 | **can-utils** (Linux) | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
 
-However, you do **NOT** need to install these manually. We provide a shell script that ease the installation of the aforementioned dependencies.
+However, you do **NOT** need to install these manually. We provide a shell script that eases the installation of the aforementioned dependencies.
 
 ### Installing dependencies
 
@@ -79,11 +79,11 @@ What the script does:
 
 ### Step 1 - Specifying the network messages
 
-The major contribution of our work is to bring in-vehicle network (specifically CAN network) concepts alongside to the CARLA driving simulation. In this direction, we need to specify the network messages that are going to be changed in the network.
+The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we need to define the messages that will be exchanged on the network.
 
-Since we are working with CAN network, we have used the industry standard CAN Database (DBC) file for specifying the messages parameters and messages periods.
+Since we are working with a CAN network, we use the industry-standard CAN Database (DBC) file to specify the message parameters and transmission periods.
 
-An example of a DBC file is presented down below. In this file, you can specify the CAN ID of, the signal size and length, their scale and offset and also minimal and max values. Alongside, we use the concept of DBC attribute to define the custom attribute "GenMsgCycleTime" where we specify the periods of the messages. For more information regarding CAN DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
+An example DBC file is shown below. In it, you can define the CAN ID, signal size and length, scale and offset, and minimum and maximum values. We also use the DBC attribute concept to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
 
 We provide a ready-to-use DBC file in the `data/carla.dbc` path. Running the platform as-is will use this DBC file.
 
@@ -247,7 +247,7 @@ As part of the cybersecurity experimentation, we provide a ready-to-use cyberatt
 conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --help
 ```
 
-The output should be following:
+The output should look like the following:
 ```bash
 CAN network attacks CLI
 usage: cyberattacks_module.py [-h]
@@ -263,17 +263,17 @@ optional arguments:
   --period PERIOD       Period between messages in seconds
 ```
 
-This highlights the available implemented cyberattacks. The attacks that correspond directly to a vehicle function (e.g: hand_brake, doors) refer to spoofing attacks targeting these functionalities. Alongside the feature you want to attack, you need to specify the 'period', which refers to the time interval the attack messages will be sent to the virtual CAN network and impact the simulated vehicle.
+This lists all available attacks. Attacks that correspond directly to a vehicle function (e.g., `hand_brake`, `doors`) are spoofing attacks targeting those features. You also need to specify `--period`, which defines the time interval between attack messages sent onto the virtual CAN network.
 
 ### Hand brake spoofing attack
 
-To demonstrate the effect of the cyberattacks, we will demonstrate some of the available attacks. First of all, we will demonstrate the effect of the spoofing attack in the 'hand_brake' functionality. To perform this attack, run the following command:
+To illustrate the available attacks, we start with the `hand_brake` spoofing attack. To perform it, run the following command:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature hand_brake --period 0.001
 ```
 
-In this scenario, we are going to expect a huge amount of messages with the CAN ID 0x604 (according to the default DBC file). Alongside, you will see that the hand brake will be kept activated in the CARLA client window, as depicted in the image down below. Regarding the effect on the vehicle, if you try to accelerate or move it, it would be kept static because it is receiving multiple hand brake messages, making it not move.
+This floods the bus with messages on CAN ID `0x604` (per the default DBC file), keeping the hand brake permanently activated in the CARLA client window, as shown below. As a result, the vehicle cannot move even if you press the throttle.
 
 <p align="center">
   <img src="images/carla_hand_brake_spoofing_attack.png" alt="Hand brake spoofing attack in CARLA">
@@ -287,17 +287,17 @@ You can also see the practical effect of the hand_brake attack in the simulated 
   </a>
 </p>
 
-**Note**: To stop the attack, simply run "Ctrl + C" in the terminal the command was executed.
+**Note:** To stop the attack, press `Ctrl+C` in the terminal where the command is running.
 
 ### Fuzzy attack
 
-Other cyberattack that is currently available in the cyberattacks module is the fuzzy attack. The fuzzy attack consists on sending random valid messages in arbitrary time to trigger different vehicle functions. To conduct this attack, run the following command:
+Another available attack is the fuzzy attack, which consists of sending random valid messages at arbitrary intervals to trigger different vehicle functions. To conduct this attack, run the following command:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature fuzzy --period 0.05
 ```
 
-In this scenario, we should expect that different vehicle functions will be triggered without the user sending the keyboard commands. This attack is often used to discover vulnerabilities and map the effects of sending tampered messages to different CAN IDs. You can see the pratical effect of the fuzzy attack in the video down below:
+As a result, various vehicle functions are triggered without any keyboard input. This attack is commonly used to discover vulnerabilities by mapping the effect of tampered messages across different CAN IDs. You can see the practical effect of the fuzzy attack in the video below:
 
 <p align="center">
   <a href="https://drive.google.com/file/d/19_SIqONoN83gpm924XBQ9UwdElETfSZr/view">
@@ -305,11 +305,11 @@ In this scenario, we should expect that different vehicle functions will be trig
   </a>
 </p>
 
-One can notice that once the attack starts being conducted, several vehicle functions such as the doors and the lights start being activated randomly.
+As shown in the video, once the attack starts, vehicle functions such as doors and lights are activated randomly.
 
 ### Intrusion Detection System (IDS)
 
-The second part of the automotive cybersecurity is the intrusion_detection module. Similar to the cyberattack, this module is extensible. We have implemented a simple statistical intrusion detection system based on the period of the CAN messages in their normal behavior. To check how to use the intrusion_detection_module, run the following command:
+The second component is the intrusion detection module. Like the cyberattacks module, it is extensible. The currently available algorithm is a simple statistical IDS that flags messages whose inter-arrival period deviates from the baseline. To see how to use it, run the following command:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 intrusion_detection_module.py --help
@@ -328,13 +328,13 @@ optional arguments:
   --detector {id_time}  Intrusion detection algorithm to use. Available options: id_time
 ```
 
-To keep the intrusion_detection running with the current detection algorithm available, run the following command in a separate terminal:
+To run the intrusion detection module with the available algorithm, open a separate terminal and run:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 intrusion_detection_module.py --detector id_time
 ```
 
-This will make a log similar to this one appear:
+A log similar to the following will be printed periodically:
 
 ```bash
 Regular messages: 455
@@ -350,9 +350,9 @@ Total intrusions: {
   "0x604": 30
 ```
 
-This log indicates the number of regular messages and the number of intrusions detected per CAN ID. It is important to notice that the current available intrusion detection is relatively simple and it might present false positives. Users are encouraged to develop more complex and accurate intrusion detection systems.
+This output shows the count of regular messages and detected intrusions per CAN ID. Note that this algorithm is intentionally simple and may produce false positives — users are encouraged to implement more sophisticated detection methods.
 
-To demonstrate the intrusion detection system behavior during an attack, in the following figure, we preent the output of the intrusion detection system while the previously presented hand_brake spoofing attack was performed:
+The figure below shows the IDS output during the hand brake spoofing attack described above:
 
 <p align="center">
   <img src="images/carla_intrusion_detection_hand_brake_spoofing.png" alt="Intrusion detection while a hand brake spoofing attack is happening.">
@@ -366,7 +366,7 @@ You can also watch the previous example in runtime in the following video demo:
   </a>
 </p>
 
-Additionally, you can also watch the video demo of the intrusion detection during the fuzzy attack:
+You can also watch the IDS output during the fuzzy attack:
 
 <p align="center">
   <a href="https://drive.google.com/file/d/1CyTvBQD580SP54hph-QrB7nAn1ug5aoF/view">
@@ -376,13 +376,13 @@ Additionally, you can also watch the video demo of the intrusion detection durin
 
 ### Collecting network traffic
 
-Another benefit of having an integrated virtual CAN bus besides seing the practical effect of messages communication and the direct impact in the simulated vehicle, is to be able to store the CAN traffic log for further analysis. For that, we can use the built-in functionality of the can-utils package and run the following command:
+Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Using the built-in `can-utils` tooling, this is as simple as:
 
 ```bash
 candump -l vcan0
 ```
 
-This command will output the logs to a file with the following name format 'candump-YYYY-MM-DD_HHMMSS.log', like the one down below:
+This writes logs to a file named `candump-YYYY-MM-DD_HHMMSS.log`, as shown below:
 
 ```bash
 cat candump-2026-03-28_133445.log
@@ -394,7 +394,7 @@ cat candump-2026-03-28_133445.log
 (1774715685.941226) vcan0 604#00
 ```
 
-Such log files can be further use for applications such as network traffic load analysis and development of machine learning-based intrusion detection systems. For future work, we aim to generate automatically labeled log dumps to facilitate the usage in machine learning project settings.
+Such logs can be used for traffic analysis and as training data for machine learning-based intrusion detection systems. As future work, we plan to generate automatically labeled captures to further support machine learning experiments.
 
 ---
 
