@@ -25,6 +25,10 @@ The network node modules (CARLA client, vehicle controls, cyberattacks and intru
 
 The modules in execution will look like the ones in the following image:
 
+<p align="center">
+  <img src="images/running-platform.png" alt="Yes, CARLA CAN — platform running with all modules">
+</p>
+
 > **Screenshot suggestion:** A side-by-side screenshot showing the CARLA simulator window alongside a terminal running `candump vcan0` would effectively illustrate live CAN traffic tied to vehicle actions.
 
 ---
