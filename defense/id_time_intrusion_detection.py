@@ -42,6 +42,8 @@ class IdTimeIntrusionDetection():
     def __init__(self):
         self.intrusion_counter = {}
         self.regular_counter = 0
+        self._last_line_count = 0
+        self._last_alert = ""
 
     def load(self, path=None):
         # Load json file
@@ -93,10 +95,41 @@ class IdTimeIntrusionDetection():
         self.print_results()
 
     def print_results(self, id: bool = False, time: bool = False):
+        RESET  = "\033[0m"
+        RED    = "\033[91m"
+        YELLOW = "\033[93m"
+        CYAN   = "\033[96m"
+        DIM    = "\033[2m"
+        SEP    = DIM + "─" * 44 + RESET
+
         if id:
-            print("Intrusion detection based on CAN ID!", flush=True)
-        if time:
-            print("Intrusion detection based on time!", flush=True)
-        print(f"Total intrusions: {json.dumps(self.intrusion_counter, indent=2)}", flush=True)
-        print(f"Regular messages: {self.regular_counter}", flush=True)
-        sys.stdout.flush()  # Extra guarantee for flushing
+            self._last_alert = f"{RED}[ALERT] Unknown CAN ID detected{RESET}"
+        elif time:
+            self._last_alert = f"{RED}[ALERT] Timing anomaly detected{RESET}"
+
+        lines = [SEP]
+        if self._last_alert:
+            lines.append(self._last_alert)
+        lines.append(
+            f"Regular messages : {CYAN}{self.regular_counter}{RESET}"
+        )
+        total = sum(self.intrusion_counter.values())
+        lines.append(
+            f"Total intrusions : {(RED if total else CYAN)}{total}{RESET}"
+        )
+        if self.intrusion_counter:
+            lines.append(f"{YELLOW}Intrusion counts :{RESET}")
+            for json_line in json.dumps(self.intrusion_counter, indent=2).splitlines():
+                lines.append(f"  {json_line}")
+        lines.append(SEP)
+
+        # Overwrite the previous block in-place
+        if self._last_line_count > 0:
+            sys.stdout.write(f"\033[{self._last_line_count}A")
+            for _ in range(self._last_line_count):
+                sys.stdout.write("\033[2K\n")
+            sys.stdout.write(f"\033[{self._last_line_count}A")
+
+        sys.stdout.write("\n".join(lines) + "\n")
+        sys.stdout.flush()
+        self._last_line_count = len(lines)
