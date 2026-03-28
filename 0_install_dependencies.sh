@@ -13,7 +13,33 @@ echo "Installing can-utils..."
 sudo apt-get install -y can-utils
 
 # ------------------------------------------------------------------
-# 2. Conda environment
+# 2. Miniconda (optional)
+# ------------------------------------------------------------------
+if command -v conda &>/dev/null; then
+    echo "conda is already installed ($(conda --version)). Skipping Miniconda installation."
+else
+    read -r -p "conda was not found. Install Miniconda now? [y/N] " response
+    if [[ "${response,,}" == "y" ]]; then
+        echo "Downloading Miniconda installer..."
+        curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+        echo "Running Miniconda installer..."
+        bash Miniconda3-latest-Linux-x86_64.sh -b -p "$HOME/miniconda3"
+        rm Miniconda3-latest-Linux-x86_64.sh
+
+        # Initialise conda for the current shell session
+        eval "$("$HOME/miniconda3/bin/conda" shell.bash hook)"
+        "$HOME/miniconda3/bin/conda" init bash
+        echo "Miniconda installed. Restart your terminal or run: source ~/.bashrc"
+    else
+        echo "Skipping Miniconda installation. conda must be available to continue."
+        echo "Install it manually from https://www.anaconda.com/docs/getting-started/miniconda/install/linux-install"
+        exit 1
+    fi
+fi
+
+# ------------------------------------------------------------------
+# 3. Conda environment
 # ------------------------------------------------------------------
 if conda env list | grep -q "^${CONDA_ENV_NAME}"; then
     echo "Conda environment '${CONDA_ENV_NAME}' already exists. Skipping creation."
@@ -29,7 +55,7 @@ echo "Python environment ready. Activate it with:"
 echo "    conda activate ${CONDA_ENV_NAME}"
 
 # ------------------------------------------------------------------
-# 3. CARLA
+# 4. CARLA
 # ------------------------------------------------------------------
 mkdir -p ${CARLA_FOLDER_NAME}
 cd ${CARLA_FOLDER_NAME}
