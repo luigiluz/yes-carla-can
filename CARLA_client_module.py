@@ -34,7 +34,7 @@ import carla
 import pygame
 
 from can_network.network import CAN_Network
-from gui import HUD, KeyboardControl, World
+from gui import CANTrafficDisplay, HUD, KeyboardControl, World
 
 
 def game_loop(args):
@@ -50,6 +50,7 @@ def game_loop(args):
     world = None
     original_settings = None
     can_bus = CAN_Network()
+    can_display = CANTrafficDisplay(channel="vcan0")
 
     try:
         client = carla.Client(args.host, args.port)
@@ -104,9 +105,12 @@ def game_loop(args):
                 return
             world.tick(clock)
             world.render(display)
+            can_display.render(display)
             pygame.display.flip()
 
     finally:
+        can_display.stop()
+
         if original_settings:
             sim_world.apply_settings(original_settings)
 
