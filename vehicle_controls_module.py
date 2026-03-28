@@ -1,3 +1,5 @@
+import signal
+import sys
 import time
 import tkinter as tk
 
@@ -394,7 +396,9 @@ def keyboard_parser_loop():
 
     while running:
         clock.tick_busy_loop(60)
-        controller.parse_events(clock, can_net)
+        if controller.parse_events(clock, can_net):
+            running = False
+            break
 
         # Redraw keys to reflect current pressed state
         for key_code, label, note, rect_frac in keys:
@@ -411,6 +415,9 @@ def keyboard_parser_loop():
             screen.blit(label_surf, label_rect)
 
         pygame.display.flip()
+
+    pygame.quit()
+    sys.exit(0)
 
 
 def print_key_bindings():
@@ -444,13 +451,17 @@ def print_key_bindings():
 
 
 def main():
+    # Ensure SIGTERM (e.g. from environment_down.sh) also exits cleanly
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
     print("Sending commands through CAN bus")
     print_key_bindings()
     try:
         keyboard_parser_loop()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\nCancelled by user. Bye!")
         pygame.quit()
+        sys.exit(0)
 
 
 if __name__ == "__main__":
