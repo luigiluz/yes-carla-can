@@ -52,7 +52,7 @@ Run the install script once. It will handle everything, prompting you only if Mi
 > **Disclaimer:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or Macbooks was not tested.
 
 ```bash
-bash 0_install_dependencies.sh
+./0_install_dependencies.sh
 ```
 
 What the script does:
@@ -108,7 +108,7 @@ Once the DBC file is properly defined, we can move to actually simulate the CAN 
 Once dependencies are installed and the DBC file specified, a single script starts the core of the simulation:
 
 ```bash
-bash 1_up_environment.sh
+./1_up_environment.sh
 ```
 
 You should see an output like the following, meaning that the environment was properly brought up:
@@ -198,7 +198,7 @@ You can watch the same demonstration in the following video:
 When you are done, tear everything down cleanly:
 
 ```bash
-bash 2_down_environment.sh
+./2_down_environment.sh
 ```
 
 The script stops the vehicle controls module, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, and finally removes `vcan0` and unloads the `vcan` kernel module.
@@ -206,7 +206,6 @@ The script stops the vehicle controls module, then the CARLA client module (wait
 You should see an output like the following, meaning that the environment was properly brought down:
 
 ```bash
-./2_down_environment.sh
 Stopping vehicle controls module...
 vehicle_controls_module (PID 10272 10291) stopped.
 Stopping CARLA client module...
