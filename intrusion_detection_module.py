@@ -13,7 +13,8 @@ def main():
     print("Intrusion Detection System for CAN Bus")
 
     parser = argparse.ArgumentParser(description="Intrusion Detection System for CAN Bus")
-    parser.add_argument("--detector", type=str, required=True, help="CAN ID to monitor")
+    parser.add_argument("--detector", type=str, required=True, choices=DETECTOR_FACTORY.keys(),
+                        help=f"Intrusion detection algorithm to use. Available options: {', '.join(DETECTOR_FACTORY.keys())}")
 
     args = parser.parse_args()
 

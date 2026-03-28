@@ -237,7 +237,70 @@ One can notice that once the attack starts being conducted, several vehicle func
 
 ### Intrusion Detection System (IDS)
 
-<!-- TODO: add screenshot of intrusion_detection_module alert output while a DoS or injection is active -->
+The second part of the automotive cybersecurity is the intrusion_detection module. Similar to the cyberattack, this module is extensible. We have implemented a simple statistical intrusion detection system based on the period of the CAN messages in their normal behavior. To check how to use the intrusion_detection_module, run the following command:
+
+```bash
+conda run --no-capture-output -n n4s_env python3 intrusion_detection_module.py --help
+```
+
+The following help output should appear:
+
+```bash
+Intrusion Detection System for CAN Bus
+usage: intrusion_detection_module.py [-h] --detector {id_time}
+
+Intrusion Detection System for CAN Bus
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --detector {id_time}  Intrusion detection algorithm to use. Available options: id_time
+```
+
+To keep the intrusion_detection running with the current detection algorithm available, run the following command in a separate terminal:
+
+```bash
+conda run --no-capture-output -n n4s_env python3 intrusion_detection_module.py --detector id_time
+```
+
+This will make a log similar to this one appear:
+
+```bash
+Regular messages: 455
+Total intrusions: {
+  "0x60d": 21,
+  "0x602": 19,
+  "0x603": 56,
+  "0x600": 27,
+  "0x606": 12,
+  "0x607": 14,
+  "0x60C": 3,
+  "0x601": 52,
+  "0x604": 30
+```
+
+This log indicates the number of regular messages and the number of intrusions detected per CAN ID. It is important to notice that the current available intrusion detection is relatively simple and it might present false positives. Users are encouraged to develop more complex and accurate intrusion detection systems.
+
+To demonstrate the intrusion detection system behavior during an attack, in the following figure, we preent the output of the intrusion detection system while the previously presented hand_brake spoofing attack was performed:
+
+<p align="center">
+  <img src="images/carla_intrusion_detection_hand_brake_spoofing.png" alt="Intrusion detection while a hand brake spoofing attack is happening.">
+</p>
+
+You can also watch the previous example in runtime in the following video demo:
+
+<p align="center">
+  <a href="https://drive.google.com/file/d/1_fF2RybJRRsp1FVnU8YsbBOPj49_O76U/view">
+    ▶ Watch: Intrusion detection during hand brake spoofing attack.
+  </a>
+</p>
+
+Additionally, you can also watch the video demo of the intrusion detection during the fuzzy attack:
+
+<p align="center">
+  <a href="https://drive.google.com/file/d/1CyTvBQD580SP54hph-QrB7nAn1ug5aoF/view">
+    ▶ Watch: Intrusion detection during fuzzy attack.
+  </a>
+</p>
 
 ### Collecting network traffic
 
