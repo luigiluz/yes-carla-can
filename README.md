@@ -126,20 +126,27 @@ Internally, the script:
 1. Launches the **CARLA simulator** in headless, low-quality mode (`-RenderOffScreen -quality_level=Low`) to minimise resource usage.
 2. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module.
 3. Waits 5 seconds for CARLA to initialise.
-4. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the ego vehicle and sensors.
+4. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the vehicle and sensors.
 5. Starts the **vehicle controls module** (`vehicle_controls_module.py`) — translates vehicle state into CAN frames and puts them on `vcan0`.
 
-Once the script is fully executed, you can control the vehicle using the keyboard, see it moving and see the CAN network traffic.
-
-
-To monitor CAN traffic in real time, open a separate terminal and run:
+Once the script is fully executed, you can control the vehicle using the keyboard, see it moving and see the CAN network traffic. Optionally, to monitor CAN traffic in real time in a separate terminal, run the following command:
 
 ```bash
 candump vcan0
 ```
 
+This will make you have three screens, one with the CARLA client, another with the vehicle controls and the third with the virtual CAN bus traffic, like in the following Figure:
+
 <p align="center">
   <img src="images/carla_simulator_canbus.png" alt="CARLA simulator alongside candump CAN traffic">
+</p>
+
+You can watch the same demonstration in the following video:
+
+<p align="center">
+  <a href="https://drive.google.com/file/d/1sZbRr9sYt1WdMqbtDC2ODVSbmgY1scZO/view">
+    ▶ Watch: Keyboard-controlled vehicle driving with live CAN traffic on vcan0
+  </a>
 </p>
 
 ### Step 3 — Bring the core modules down
@@ -160,9 +167,53 @@ Since you already know how to use the core functionalities of the "Yes, CARLA CA
 
 For this section, we assume that the environment is already up (`1_up_environment.sh` has been run).
 
+### Conducting cyberattacks
+
+As part of the cybersecurity experimentation, we provide a ready-to-use cyberattacks module. This module needs the same dependencies installed in the conda environment, so be sure to use it within the environment. To see the available attacks, run the following command:
+
+```bash
+conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --help
+```
+
+The output should be following:
+```bash
+CAN network attacks CLI
+usage: cyberattacks_module.py [-h]
+                              [--feature {hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}]
+                              [--period PERIOD]
+
+Perform CAN network attacks.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --feature {hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}
+                        Feature to attack
+  --period PERIOD       Period between messages in seconds
+```
+
+This highlights the available implemented cyberattacks. The attacks that correspond directly to a vehicle function (e.g: hand_brake, doors) refer to spoofing attacks targeting these functionalities. Alongside the feature you want to attack, you need to specify the 'period', which refers to the time interval the attack messages will be sent to the virtual CAN network and impact the simulated vehicle.
+
 ### Hand brake spoofing attack
 
-<!-- TODO: add screenshot of cyberattacks_module DoS output and candump showing the flood -->
+To demonstrate the effect of the cyberattacks, we will demonstrate some of the available attacks. First of all, we will demonstrate the effect of the spoofing attack in the 'hand_brake' functionality. To perform this attack, run the following command:
+
+```bash
+conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature hand_brake --period 0.01
+```
+
+In this scenario, we are going to expect a huge amount of messages with the CAN ID 0x604 (according to the default DBC file). Alongside, you will see that the hand brake will be kept activated in the CARLA client window, as depicted in the image down below. Regarding the effect on the vehicle, if you try to accelerate or move it, it would be kept static because it is receiving multiple hand brake messages, making it not move.
+
+<p align="center">
+  <img src="images/carla_hand_brake_spoofing_attack.png" alt="Hand brake spoofing attack in CARLA">
+</p>
+
+You can also see the practical effect of the hand_brake attack in the simulated vehicle in the following video:
+
+<p align="center">
+  <a href="https://drive.google.com/file/d/1Ps3my8ZaApw0_7h0mjAC8QWvaetcpGek/view">
+    ▶ Watch: Hand brake spoofing attack demo
+  </a>
+</p>
 
 ### Fuzzy attack
 
