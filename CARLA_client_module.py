@@ -12,6 +12,7 @@ import argparse
 import glob
 import logging
 import os
+import signal
 import sys
 
 try:
@@ -109,16 +110,29 @@ def game_loop(args):
             pygame.display.flip()
 
     finally:
-        can_display.stop()
-
-        if original_settings:
-            sim_world.apply_settings(original_settings)
-
-        if world and world.recording_enabled:
-            client.stop_recorder()
-
+        # Stop CARLA sensor streams first so the server can close sessions cleanly
+        # before any other teardown that might talk to the server or tear down the
+        # CAN interface.
         if world is not None:
-            world.destroy()
+            try:
+                world.destroy()
+            except Exception:
+                pass
+
+        can_display.stop()
+        can_bus.bus.shutdown()
+
+        try:
+            if original_settings:
+                sim_world.apply_settings(original_settings)
+        except Exception:
+            pass
+
+        try:
+            if world and world.recording_enabled:
+                client.stop_recorder()
+        except Exception:
+            pass
 
         pygame.quit()
 
@@ -191,6 +205,8 @@ def main():
     logging.info("listening to server %s:%s", args.host, args.port)
 
     print(__doc__)
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
     try:
         game_loop(args)
