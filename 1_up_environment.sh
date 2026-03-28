@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Start CARLA simulator in the background
 echo "Starting CARLA simulator..."
-./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality_level=Low -nosound &
+./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality_level=Low -nosound 2>/dev/null &
 
 # Set up virtual CAN bus
 echo "Setting up virtual CAN bus..."
