@@ -198,7 +198,7 @@ This highlights the available implemented cyberattacks. The attacks that corresp
 To demonstrate the effect of the cyberattacks, we will demonstrate some of the available attacks. First of all, we will demonstrate the effect of the spoofing attack in the 'hand_brake' functionality. To perform this attack, run the following command:
 
 ```bash
-conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature hand_brake --period 0.01
+conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature hand_brake --period 0.001
 ```
 
 In this scenario, we are going to expect a huge amount of messages with the CAN ID 0x604 (according to the default DBC file). Alongside, you will see that the hand brake will be kept activated in the CARLA client window, as depicted in the image down below. Regarding the effect on the vehicle, if you try to accelerate or move it, it would be kept static because it is receiving multiple hand brake messages, making it not move.
@@ -215,9 +215,25 @@ You can also see the practical effect of the hand_brake attack in the simulated 
   </a>
 </p>
 
+**Note**: To stop the attack, simply run "Ctrl + C" in the terminal the command was executed.
+
 ### Fuzzy attack
 
-<!-- TODO: add screenshot of cyberattacks_module injection output and the resulting vehicle state change in the CARLA window -->
+Other cyberattack that is currently available in the cyberattacks module is the fuzzy attack. The fuzzy attack consists on sending random valid messages in arbitrary time to trigger different vehicle functions. To conduct this attack, run the following command:
+
+```bash
+conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature fuzzy --period 0.05
+```
+
+In this scenario, we should expect that different vehicle functions will be triggered without the user sending the keyboard commands. This attack is often used to discover vulnerabilities and map the effects of sending tampered messages to different CAN IDs. You can see the pratical effect of the fuzzy attack in the video down below:
+
+<p align="center">
+  <a href="https://drive.google.com/file/d/19_SIqONoN83gpm924XBQ9UwdElETfSZr/view">
+    ▶ Watch: Fuzzy attack demo
+  </a>
+</p>
+
+One can notice that once the attack starts being conducted, several vehicle functions such as the doors and the lights start being activated randomly.
 
 ### Intrusion Detection System (IDS)
 
