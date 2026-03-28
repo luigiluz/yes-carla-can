@@ -82,6 +82,8 @@ class CANTrafficDisplay:
         self._active = False
         if self._bus:
             self._bus.shutdown()
+        if hasattr(self, "_thread"):
+            self._thread.join(timeout=2.0)
 
     def render(self, display: pygame.Surface):
         self._init_font()
