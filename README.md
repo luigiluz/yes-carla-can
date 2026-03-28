@@ -29,8 +29,6 @@ The modules in execution will look like the ones in the following image:
   <img src="images/running-platform.png" alt="Yes, CARLA CAN — platform running with all modules">
 </p>
 
-> **Screenshot suggestion:** A side-by-side screenshot showing the CARLA simulator window alongside a terminal running `candump vcan0` would effectively illustrate live CAN traffic tied to vehicle actions.
-
 ---
 
 ## Dependencies
@@ -63,15 +61,6 @@ What the script does:
 3. Creates the `n4s_env` conda environment with Python 3.9 (skips if it already exists).
 4. Installs all Python packages from `requirements.txt` into `n4s_env`.
 5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
-
-> **Screenshot suggestion:** A terminal recording (or screenshot) of the script running successfully, ending with the `"CARLA installed successfully!"` message, would be a useful reference for reproducibility.
-
->
-> | Script | Purpose |
-> |---|---|
-> | `0_install_dependencies.sh` | Installs system packages, Miniconda (optional), the conda environment, Python packages, and CARLA |
-> | `1_up_environment.sh` | Starts CARLA, creates the virtual CAN bus, and launches all Python modules |
-> | `2_down_environment.sh` | Gracefully stops all processes and removes the virtual CAN interface |
 
 ---
 
