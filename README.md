@@ -2,7 +2,7 @@
 
 **Yes, CARLA CAN** is an automotive cybersecurity experimentation platform that extends the [CARLA](https://carla.org/) driving simulator with a virtual [CAN bus](https://en.wikipedia.org/wiki/CAN_bus). It lets you run attack and defense experiments against a simulated vehicle network without any dedicated hardware.
 
----
+This work was submitted for the Salão de Ferramentas of Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos 2026 and is currently under revision.
 
 ## Architecture overview
 
@@ -31,42 +31,84 @@ The modules in execution will look like the ones in the following image:
 
 ---
 
-## Dependencies
+# Estrutura do readme.md
 
-"Yes, CARLA CAN" depends on the following software components:
+This README is organized as follows:
 
-| Dependency | Purpose |
-|---|---|
-| **conda / Miniconda** | Python virtual environment management |
-| **Python 3.9** | Runtime (required by several libraries) |
-| **Python packages** | Listed in `requirements.txt` (key ones: `carla 0.9.15`, `cantools`, `python-can`, `dash`, `matplotlib`, `scikit-learn`) |
-| **CARLA 0.9.15** | Autonomous driving simulator (server) |
-| **can-utils** (Linux) | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
-
-However, you do **NOT** need to install these manually. We provide a shell script that eases the installation of the aforementioned dependencies.
-
-### Installing dependencies
-
-Run the install script once. It will handle everything, prompting you only if Miniconda is not yet present:
-
-> **Disclaimer:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or Macbooks was not tested.
-
-```bash
-./0_install_dependencies.sh
-```
-
-What the script does:
-1. Installs `can-utils` via `apt-get`.
-2. Checks for `conda`; if absent, offers to download and install Miniconda automatically.
-3. Creates the `n4s_env` conda environment with Python 3.9 (skips if it already exists).
-4. Installs all Python packages from `requirements.txt` into `n4s_env`.
-5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
+- **Selos Considerados**: the evaluation seals being requested for this artifact submission.
+- **Informações básicas**: hardware and software environment used to develop and test the platform.
+- **Dependências**: software packages and tools required to run the platform.
+- **Preocupações com segurança**: security notes for reviewers running the artifact.
+- **Instalação**: step-by-step process to download and install the platform.
+- **Teste mínimo**: minimal execution test to verify a successful installation.
+- **Experimentos**: step-by-step reproduction of the paper's demonstrations.
+- **LICENSE**: the project's open-source license.
 
 ---
 
-## Setting up the simulation environment
+# Selos Considerados
 
-### Step 1 - Specifying the network messages
+Os selos considerados são: Disponíveis, Funcionais, Sustentáveis e Reprodutíveis.
+
+---
+
+# Informações básicas
+
+**Hardware** (tested configuration):
+
+| Component | Specification |
+|---|---|
+| **Machine** | Lenovo ThinkPad L14 |
+| **CPU** | 11th Gen Intel Core i5-1135G7 @ 2.40GHz (4 cores / 8 threads, up to 4.2 GHz) |
+| **RAM** | 16 GB |
+
+**Software**:
+
+| Component | Specification |
+|---|---|
+| **OS** | Ubuntu/Debian-based Linux (tested on Debian GNU/Linux 13 — Trixie) |
+| **Package manager** | conda / Miniconda |
+| **Python** | 3.9 |
+
+> **Note:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or macOS was not tested.
+
+---
+
+# Dependências
+
+"Yes, CARLA CAN" depends on the following software components:
+
+| Dependency | Version | Purpose |
+|---|---|---|
+| **conda / Miniconda** | any | Python virtual environment management |
+| **Python** | 3.9 | Runtime (required by several libraries) |
+| **carla** | 0.9.15 | Python client for the CARLA simulator |
+| **cantools** | see `requirements.txt` | DBC file parsing and CAN frame encoding/decoding |
+| **python-can** | see `requirements.txt` | SocketCAN interface for sending/receiving CAN frames |
+| **dash** | see `requirements.txt` | Web-based CAN traffic visualisation dashboard |
+| **matplotlib** | see `requirements.txt` | Plotting and data visualisation |
+| **scikit-learn** | see `requirements.txt` | Machine learning utilities for IDS |
+| **CARLA 0.9.15** | 0.9.15 | Autonomous driving simulator (server) |
+| **can-utils** | Linux system package | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
+
+All Python packages are listed in `requirements.txt`. The full installation is handled automatically by the provided script — see the [Instalação](#instalação) section.
+
+---
+
+# Preocupações com segurança
+
+The installation and setup process requires elevated privileges (`sudo`) on the reviewer's machine for two operations:
+
+1. **System package installation**: `0_install_dependencies.sh` calls `apt-get install can-utils`, which requires `sudo` access.
+2. **Kernel module loading**: `1_up_environment.sh` loads the `vcan` Linux kernel module via `modprobe vcan` and creates a virtual network interface (`vcan0`), which also requires `sudo`.
+
+The virtual CAN interface (`vcan0`) is entirely software-defined and isolated from any real vehicle network and from the internet. It poses no risk to physical hardware or external systems. Reviewers are advised to inspect `0_install_dependencies.sh` and `1_up_environment.sh` before running them with elevated privileges.
+
+---
+
+# Instalação
+
+## Step 1 — Specifying the network messages
 
 The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we need to define the messages that will be exchanged on the network.
 
@@ -101,11 +143,32 @@ BA_ "GenMsgCycleTime" BO_ 1538 100;
 ...
 ```
 
-Once the DBC file is properly defined, we can move to actually simulate the CAN network and the vehicle behavior.
+Once the DBC file is properly defined, we can move to installing the dependencies.
 
-### Step 2 — Bring the core modules up
+## Step 2 — Installing dependencies
 
-Once dependencies are installed and the DBC file specified, a single script starts the core of the simulation:
+Run the install script once. It will handle everything, prompting you only if Miniconda is not yet present:
+
+> **Disclaimer:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or Macbooks was not tested.
+
+```bash
+./0_install_dependencies.sh
+```
+
+What the script does:
+1. Installs `can-utils` via `apt-get`.
+2. Checks for `conda`; if absent, offers to download and install Miniconda automatically.
+3. Creates the `n4s_env` conda environment with Python 3.9 (skips if it already exists).
+4. Installs all Python packages from `requirements.txt` into `n4s_env`.
+5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
+
+After this step, all dependencies are installed and the platform is ready to be executed.
+
+---
+
+# Teste mínimo
+
+Once the installation is complete, bring the core simulation up with:
 
 ```bash
 ./1_up_environment.sh
@@ -166,20 +229,20 @@ Close `vkconfig` and re-run `1_up_environment.sh`.
 
 <br>
 
-Internally, the script:
+Internally, `1_up_environment.sh`:
 1. Launches the **CARLA simulator** in headless, low-quality mode (`-RenderOffScreen -quality_level=Low`) to minimise resource usage.
 2. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module.
 3. Waits 5 seconds for CARLA to initialise.
 4. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the vehicle and sensors.
 5. Starts the **vehicle controls module** (`vehicle_controls_module.py`) — translates vehicle state into CAN frames and puts them on `vcan0`.
 
-Once the script is fully executed, you can control the vehicle using the keyboard, see it moving and see the CAN network traffic. Optionally, to monitor CAN traffic in real time in a separate terminal, run the following command:
+To confirm the virtual CAN bus is active and producing traffic, run in a separate terminal:
 
 ```bash
 candump vcan0
 ```
 
-This will make you have three screens, one with the CARLA client, another with the vehicle controls and the third with the virtual CAN bus traffic, like in the following Figure:
+You should see CAN frames scrolling in real time. This will make you have three screens, one with the CARLA client, another with the vehicle controls and the third with the virtual CAN bus traffic, like in the following Figure:
 
 <p align="center">
   <img src="images/carla_simulator_canbus.png" alt="CARLA simulator alongside candump CAN traffic">
@@ -192,8 +255,6 @@ You can watch the same demonstration in the following video:
     ▶ Watch: Keyboard-controlled vehicle driving with live CAN traffic on vcan0
   </a>
 </p>
-
-### Step 3 — Bring the core modules down
 
 When you are done, tear everything down cleanly:
 
@@ -221,13 +282,11 @@ Environment is down!
 
 ---
 
-## Demonstrations
+# Experimentos
 
-Since you already know how to use the core functionalities of the "Yes, CARLA CAN" platform, we can move on to the demonstrations of automotive cybersecurity concepts.
+For all experiments below, the environment must already be up (`1_up_environment.sh` has been run). Each experiment is independent and can be stopped at any time with `Ctrl+C`.
 
-For this section, we assume that the environment is already up (`1_up_environment.sh` has been run).
-
-### Conducting cyberattacks
+## Reivindicações #1 — Hand brake spoofing attack
 
 As part of the cybersecurity experimentation, we provide a ready-to-use cyberattacks module. This module needs the same dependencies installed in the conda environment, so be sure to use it within the environment. To see the available attacks, run the following command:
 
@@ -253,9 +312,7 @@ optional arguments:
 
 This lists all available attacks. Attacks that correspond directly to a vehicle function (e.g., `hand_brake`, `doors`) are spoofing attacks targeting those features. You also need to specify `--period`, which defines the time interval between attack messages sent onto the virtual CAN network.
 
-### Hand brake spoofing attack
-
-To illustrate the available attacks, we start with the `hand_brake` spoofing attack. To perform it, run the following command:
+To perform the `hand_brake` spoofing attack, run the following command:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature hand_brake --period 0.001
@@ -277,7 +334,7 @@ You can also see the practical effect of the hand_brake attack in the simulated 
 
 **Note:** To stop the attack, press `Ctrl+C` in the terminal where the command is running.
 
-### Fuzzy attack
+## Reivindicações #2 — Fuzzy attack
 
 Another available attack is the fuzzy attack, which consists of sending random valid messages at arbitrary intervals to trigger different vehicle functions. To conduct this attack, run the following command:
 
@@ -295,9 +352,9 @@ As a result, various vehicle functions are triggered without any keyboard input.
 
 As shown in the video, once the attack starts, vehicle functions such as doors and lights are activated randomly.
 
-### Intrusion Detection System (IDS)
+## Reivindicações #3 — Intrusion Detection System (IDS)
 
-The second component is the intrusion detection module. Like the cyberattacks module, it is extensible. The currently available algorithm is a simple statistical IDS that flags messages whose inter-arrival period deviates from the baseline. To see how to use it, run the following command:
+The intrusion detection module is extensible. The currently available algorithm is a simple statistical IDS that flags messages whose inter-arrival period deviates from the baseline. To see how to use it, run the following command:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 intrusion_detection_module.py --help
@@ -340,7 +397,7 @@ Total intrusions: {
 
 This output shows the count of regular messages and detected intrusions per CAN ID. Note that this algorithm is intentionally simple and may produce false positives — users are encouraged to implement more sophisticated detection methods.
 
-The figure below shows the IDS output during the hand brake spoofing attack described above:
+The figure below shows the IDS output during the hand brake spoofing attack described in Reivindicações #1:
 
 <p align="center">
   <img src="images/carla_intrusion_detection_hand_brake_spoofing.png" alt="Intrusion detection while a hand brake spoofing attack is happening.">
@@ -362,7 +419,7 @@ You can also watch the IDS output during the fuzzy attack:
   </a>
 </p>
 
-### Collecting network traffic
+## Reivindicações #4 — Collecting network traffic
 
 Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Using the built-in `can-utils` tooling, this is as simple as:
 
@@ -386,4 +443,30 @@ Such logs can be used for traffic analysis and as training data for machine lear
 
 ---
 
-This work was submitted for the Salão de Ferraments of Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos 2026 and is currently under revision.
+# LICENSE
+
+This project is licensed under the MIT License.
+
+```
+MIT License
+
+Copyright (c) 2025 Luigi Luz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
