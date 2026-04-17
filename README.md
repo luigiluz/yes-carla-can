@@ -185,46 +185,7 @@ After this step, all dependencies are installed and the platform is ready to be 
 
 ---
 
-# Minimal Test
-
-## Step 1 — Specifying the network messages
-
-The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we need to define the messages that will be exchanged on the network.
-
-Since we are working with a CAN network, we use the industry-standard CAN Database (DBC) file to specify the message parameters and transmission periods.
-
-An example DBC file is shown below. In it, you can define the CAN ID, signal size and length, scale and offset, and minimum and maximum values. We also use the DBC attribute concept to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
-
-We provide a ready-to-use DBC file in the `data/carla.dbc` path. Running the platform as-is will use the pre-configured DBC file.
-
-```text
-VERSION "1.0"
-...
-BU_: ECU
-
-BO_ 1536 THROTTLE: 4 ECU
- SG_ THROTTLE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
-
-BO_ 1537 BRAKE: 4 ECU
- SG_ BRAKE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
-
-BO_ 1538 STEER: 4 ECU
- SG_ STEER_signal : 0|8@1+ (1,0) [0|255] ""  ECU
-...
-
-BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
-
-BA_DEF_DEF_ "GenMsgCycleTime" 0;
-
-BA_ "GenMsgCycleTime" BO_ 1536 100;
-BA_ "GenMsgCycleTime" BO_ 1537 100;
-BA_ "GenMsgCycleTime" BO_ 1538 100;
-...
-```
-
-Once the DBC file is properly defined, we can move to running the core simulation modules.
-
-## Step 2 — Starting the simulation environment
+# Minimal Test - Starting the simulation environment
 
 You can bring the core simulation up with the following command:
 
@@ -342,9 +303,46 @@ Environment is down!
 
 # Experiments
 
-For all experiments below, the environment must already be up (`1_up_environment.sh` has been run). Each experiment is independent and can be stopped at any time with `Ctrl+C`.
+## Experiment #0 - Specifying the network messages through DBC files (Optional)
 
-## Claim #1 — Hand brake spoofing attack
+The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we need to define the messages that will be exchanged on the network.
+
+Since we are working with a CAN network, we use the industry-standard CAN Database (DBC) file to specify the message parameters and transmission periods.
+
+An example DBC file is shown below. In it, you can define the CAN ID, signal size and length, scale and offset, and minimum and maximum values. We also use the DBC attribute concept to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
+
+We provide a ready-to-use DBC file in the `data/carla.dbc` path. Running the platform as-is will use the pre-configured DBC file.
+
+```text
+VERSION "1.0"
+...
+BU_: ECU
+
+BO_ 1536 THROTTLE: 4 ECU
+ SG_ THROTTLE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+
+BO_ 1537 BRAKE: 4 ECU
+ SG_ BRAKE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+
+BO_ 1538 STEER: 4 ECU
+ SG_ STEER_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+...
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
+
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+
+BA_ "GenMsgCycleTime" BO_ 1536 100;
+BA_ "GenMsgCycleTime" BO_ 1537 100;
+BA_ "GenMsgCycleTime" BO_ 1538 100;
+...
+```
+
+Once the DBC file is properly defined, we can move to running the core simulation modules.
+
+For all the following experiments below, the environment must already be up (`1_up_environment.sh` has been run). Each experiment is independent and can be stopped at any time with `Ctrl+C`.
+
+## Experiment #1 — Hand brake spoofing attack
 
 As part of the cybersecurity experimentation, we provide a ready-to-use cyberattacks module. This module needs the same dependencies installed in the conda environment, so be sure to use it within the environment. To see the available attacks, run the following command:
 
@@ -392,7 +390,7 @@ You can also see the practical effect of the hand_brake attack in the simulated 
 
 **Note:** To stop the attack, press `Ctrl+C` in the terminal where the command is running.
 
-## Claim #2 — Fuzzy attack
+## Experiment #2 — Fuzzy attack
 
 Another available attack is the fuzzy attack, which consists of sending random valid messages at arbitrary intervals to trigger different vehicle functions. To conduct this attack, run the following command:
 
@@ -410,7 +408,7 @@ As a result, various vehicle functions are triggered without any keyboard input.
 
 As shown in the video, once the attack starts, vehicle functions such as doors and lights are activated randomly.
 
-## Claim #3 — Intrusion Detection System (IDS)
+## Experiment #3 — Intrusion Detection System (IDS)
 
 The intrusion detection module is extensible. The currently available algorithm is a simple statistical IDS that flags messages whose inter-arrival period deviates from the baseline. To see how to use it, run the following command:
 
@@ -477,7 +475,7 @@ You can also watch the IDS output during the fuzzy attack:
   </a>
 </p>
 
-## Claim #4 — Collecting network traffic
+## Experiment #4 — Collecting network traffic
 
 Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Using the built-in `can-utils` tooling, this is as simple as:
 
