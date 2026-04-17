@@ -2,7 +2,7 @@
 
 **Yes, CARLA CAN** is an automotive cybersecurity experimentation platform that extends the [CARLA](https://carla.org/) driving simulator with a virtual [CAN bus](https://en.wikipedia.org/wiki/CAN_bus). It lets you run attack and defense experiments against a simulated vehicle network without any dedicated hardware.
 
----
+This work was accepted for the Salão de Ferramentas of the Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos (SBRC) 2026 and is currently under revision by the Artifact Technical Committee.
 
 ## Architecture overview
 
@@ -29,27 +29,146 @@ The modules in execution will look like the ones in the following image:
   <img src="images/running-platform.png" alt="Yes, CARLA CAN — platform running with all modules">
 </p>
 
+The following section maps each of these modules to their corresponding files and directories in the repository.
+
+## Repository organization
+
+```
+yes-carla-can/
+│
+├── 0_install_dependencies.sh     # Installs all system and Python dependencies
+├── 1_up_environment.sh           # Starts CARLA, vcan0, and the core modules
+├── 2_down_environment.sh         # Tears down the simulation environment cleanly
+│
+├── CARLA_client_module.py        # Connects to CARLA, spawns the ego vehicle and sensors
+├── vehicle_controls_module.py    # Translates keyboard input into CAN frames on vcan0
+├── cyberattacks_module.py        # CLI entry point for injecting attack traffic onto vcan0
+├── intrusion_detection_module.py # CLI entry point for running IDS algorithms on vcan0
+│
+├── requirements.txt              # Python package dependencies
+│
+├── attacks/                      # Attack algorithm implementations
+│   ├── denial_of_service.py      #   DoS flooding attack
+│   └── reverse_engineering.py    #   Feature spoofing via reverse-engineered CAN IDs
+│
+├── can_network/                  # CAN network abstraction layer
+│   ├── network.py                #   SocketCAN interface (send/receive frames)
+│   ├── comm_matrix.py            #   DBC-derived communication matrix
+│   ├── constants.py              #   Shared CAN constants
+│   └── utils.py                  #   Helper utilities
+│
+├── defense/                      # IDS algorithm implementations
+│   └── id_time_intrusion_detection.py  # Statistical inter-arrival time detector
+│
+├── gui/                          # Graphical interface components
+│   ├── world.py                  #   CARLA world and vehicle management
+│   ├── hud.py                    #   On-screen heads-up display
+│   ├── camera_manager.py         #   Camera sensor rendering
+│   ├── can_traffic_display.py    #   Live CAN traffic dashboard (Dash)
+│   ├── keyboard_control.py       #   Keyboard input handler
+│   ├── functions.py              #   GUI utility functions
+│   └── text.py                   #   Text rendering helpers
+│
+├── sensors/                      # CARLA sensor wrappers
+│   ├── collision.py              #   Collision sensor
+│   ├── gnss.py                   #   GNSS (GPS) sensor
+│   ├── imu.py                    #   IMU sensor
+│   ├── lane_invasion.py          #   Lane invasion sensor
+│   └── radar.py                  #   Radar sensor
+│
+├── data/                         # Network data and analysis
+│   ├── carla.dbc                 #   DBC file defining the virtual CAN network schema
+│   ├── motohawk.dbc              #   Reference DBC file
+│   ├── candump_parsed.csv        #   Example parsed CAN traffic log
+│   ├── can_ids_statistics.json   #   Per-ID timing statistics (baseline)
+│   ├── can_bus_data_analyzer.py  #   Traffic analysis script
+│   └── candump_csv_parser.py     #   Parser for candump log files
+│
+├── carla-0-9-15/                 # CARLA 0.9.15 simulator installation (downloaded by script)
+│
+└── images/                       # Images used in this README
+```
+
 ---
 
-## Dependencies
+# README Structure
+
+This README is organized as follows:
+
+- [**Considered Seals**](#considered-seals): the evaluation seals being requested for this artifact submission.
+- [**Basic Information**](#basic-information): hardware and software environment used to develop and test the platform.
+- [**Dependencies**](#dependencies): software packages and tools required to run the platform.
+- [**Security Concerns**](#security-concerns): security notes for users running the platform.
+- [**Installation**](#installation): step-by-step process to download and install the platform.
+- [**Minimal Test**](#minimal-test): minimal execution test to verify a successful installation.
+- [**Experiments**](#experiments): step-by-step reproduction of the paper's demonstrations.
+- [**LICENSE**](#license): the project's open-source license.
+
+---
+
+# Considered Seals
+
+The considered seals are: Available, Functional, Sustainable, and Reproducible.
+
+---
+
+# Basic Information
+
+**Hardware** (tested configuration):
+
+| Component | Specification |
+|---|---|
+| **Machine** | Lenovo ThinkPad L14 |
+| **CPU** | 11th Gen Intel Core i5-1135G7 @ 2.40GHz (4 cores / 8 threads, up to 4.2 GHz) |
+| **RAM** | 16 GB |
+
+**Software**:
+
+| Component | Specification |
+|---|---|
+| **OS** | Ubuntu/Debian-based Linux (tested on Debian GNU/Linux 13 — Trixie and Ubuntu 22.04 LTS Jammy Jellyfish) |
+| **Package manager** | conda / Miniconda |
+| **Python** | 3.9 |
+
+> **Note:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or macOS was not tested.
+
+---
+
+# Dependencies
 
 "Yes, CARLA CAN" depends on the following software components:
 
-| Dependency | Purpose |
-|---|---|
-| **conda / Miniconda** | Python virtual environment management |
-| **Python 3.9** | Runtime (required by several libraries) |
-| **Python packages** | Listed in `requirements.txt` (key ones: `carla 0.9.15`, `cantools`, `python-can`, `dash`, `matplotlib`, `scikit-learn`) |
-| **CARLA 0.9.15** | Autonomous driving simulator (server) |
-| **can-utils** (Linux) | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
+| Dependency | Version | Purpose |
+|---|---|---|
+| **conda / Miniconda** | any | Python virtual environment management |
+| **Python** | 3.9 | Runtime (required by several libraries) |
+| **carla** | 0.9.15 | Python client for the CARLA simulator |
+| **cantools** | see `requirements.txt` | DBC file parsing and CAN frame encoding/decoding |
+| **python-can** | see `requirements.txt` | SocketCAN interface for sending/receiving CAN frames |
+| **dash** | see `requirements.txt` | Web-based CAN traffic visualisation dashboard |
+| **matplotlib** | see `requirements.txt` | Plotting and data visualisation |
+| **scikit-learn** | see `requirements.txt` | Machine learning utilities for IDS |
+| **CARLA 0.9.15** | 0.9.15 | Autonomous driving simulator (server) |
+| **can-utils** | Linux system package | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
 
-However, you do **NOT** need to install these manually. We provide a shell script that eases the installation of the aforementioned dependencies.
+All Python packages are listed in `requirements.txt`. The full installation is handled automatically by the provided script — see the [Installation](#installation) section.
 
-### Installing dependencies
+---
+
+# Security Concerns
+
+The installation and setup process requires elevated privileges (`sudo`) on the user's machine for two operations:
+
+1. **System package installation**: `0_install_dependencies.sh` calls `apt-get install can-utils`, which requires `sudo` access.
+2. **Kernel module loading**: `1_up_environment.sh` loads the `vcan` Linux kernel module via `modprobe vcan` and creates a virtual network interface (`vcan0`), which also requires `sudo`.
+
+The virtual CAN interface (`vcan0`) is entirely software-defined and isolated from any real vehicle network and from the internet. It poses no risk to physical hardware or external systems.
+
+---
+
+# Installation
 
 Run the install script once. It will handle everything, prompting you only if Miniconda is not yet present:
-
-> **Disclaimer:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or Macbooks was not tested.
 
 ```bash
 ./0_install_dependencies.sh
@@ -62,50 +181,13 @@ What the script does:
 4. Installs all Python packages from `requirements.txt` into `n4s_env`.
 5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
 
+After this step, all dependencies are installed and the platform is ready to be executed.
+
 ---
 
-## Setting up the simulation environment
+# Minimal Test - Starting the simulation environment
 
-### Step 1 - Specifying the network messages
-
-The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we need to define the messages that will be exchanged on the network.
-
-Since we are working with a CAN network, we use the industry-standard CAN Database (DBC) file to specify the message parameters and transmission periods.
-
-An example DBC file is shown below. In it, you can define the CAN ID, signal size and length, scale and offset, and minimum and maximum values. We also use the DBC attribute concept to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
-
-We provide a ready-to-use DBC file in the `data/carla.dbc` path. Running the platform as-is will use this DBC file.
-
-```text
-VERSION "1.0"
-...
-BU_: ECU
-
-BO_ 1536 THROTTLE: 4 ECU
- SG_ THROTTLE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
-
-BO_ 1537 BRAKE: 4 ECU
- SG_ BRAKE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
-
-BO_ 1538 STEER: 4 ECU
- SG_ STEER_signal : 0|8@1+ (1,0) [0|255] ""  ECU
-...
-
-BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
-
-BA_DEF_DEF_ "GenMsgCycleTime" 0;
-
-BA_ "GenMsgCycleTime" BO_ 1536 100;
-BA_ "GenMsgCycleTime" BO_ 1537 100;
-BA_ "GenMsgCycleTime" BO_ 1538 100;
-...
-```
-
-Once the DBC file is properly defined, we can move to actually simulate the CAN network and the vehicle behavior.
-
-### Step 2 — Bring the core modules up
-
-Once dependencies are installed and the DBC file specified, a single script starts the core of the simulation:
+You can bring the core simulation up with the following command:
 
 ```bash
 ./1_up_environment.sh
@@ -166,20 +248,20 @@ Close `vkconfig` and re-run `1_up_environment.sh`.
 
 <br>
 
-Internally, the script:
+Internally, `1_up_environment.sh`:
 1. Launches the **CARLA simulator** in headless, low-quality mode (`-RenderOffScreen -quality_level=Low`) to minimise resource usage.
 2. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module.
 3. Waits 5 seconds for CARLA to initialise.
 4. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the vehicle and sensors.
 5. Starts the **vehicle controls module** (`vehicle_controls_module.py`) — translates vehicle state into CAN frames and puts them on `vcan0`.
 
-Once the script is fully executed, you can control the vehicle using the keyboard, see it moving and see the CAN network traffic. Optionally, to monitor CAN traffic in real time in a separate terminal, run the following command:
+To confirm the virtual CAN bus is active and producing traffic, run in a separate terminal:
 
 ```bash
 candump vcan0
 ```
 
-This will make you have three screens, one with the CARLA client, another with the vehicle controls and the third with the virtual CAN bus traffic, like in the following Figure:
+You should see CAN frames scrolling in real time. This will make you have three screens, one with the CARLA client, another with the vehicle controls and the third with the virtual CAN bus traffic, like in the following Figure:
 
 <p align="center">
   <img src="images/carla_simulator_canbus.png" alt="CARLA simulator alongside candump CAN traffic">
@@ -192,8 +274,6 @@ You can watch the same demonstration in the following video:
     ▶ Watch: Keyboard-controlled vehicle driving with live CAN traffic on vcan0
   </a>
 </p>
-
-### Step 3 — Bring the core modules down
 
 When you are done, tear everything down cleanly:
 
@@ -221,13 +301,47 @@ Environment is down!
 
 ---
 
-## Demonstrations
+# Experiments
 
-Since you already know how to use the core functionalities of the "Yes, CARLA CAN" platform, we can move on to the demonstrations of automotive cybersecurity concepts.
+For all the following experiments below, the environment must already be up (`1_up_environment.sh` has been run). Each experiment is independent and can be stopped at any time with `Ctrl+C`.
 
-For this section, we assume that the environment is already up (`1_up_environment.sh` has been run).
+## Experiment #0 - Defining network messages and transmission periods
 
-### Conducting cyberattacks
+We use the industry-standard CAN Database (DBC) file to specify the message parameters and transmission periods. We provide a ready-to-use DBC file at [`data/carla.dbc`](data/carla.dbc). Running the platform as-is will use this pre-configured DBC file.
+
+A preview of the [`data/carla.dbc`](data/carla.dbc) is shown down below. In it, we define the messages' CAN IDs, signals sizes and lengths, scales and offsets, and minimum and maximum values. We use a DBC attribute to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
+
+
+```text
+VERSION "1.0"
+...
+BU_: ECU
+
+BO_ 1536 THROTTLE: 4 ECU
+ SG_ THROTTLE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+
+BO_ 1537 BRAKE: 4 ECU
+ SG_ BRAKE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+
+BO_ 1538 STEER: 4 ECU
+ SG_ STEER_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+...
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
+
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+
+BA_ "GenMsgCycleTime" BO_ 1536 100;
+BA_ "GenMsgCycleTime" BO_ 1537 100;
+BA_ "GenMsgCycleTime" BO_ 1538 100;
+...
+```
+
+**Note:** For more details on how to create custom DBC files, refer to the [Advanced usage - Customizing network messages and periods](#advanced-usage---customizing-network-messages-and-periods) section.
+
+The following experiments consider the usage of the default [`data/carla.dbc`](data/carla.dbc) file.
+
+## Experiment #1 — Hand brake spoofing attack
 
 As part of the cybersecurity experimentation, we provide a ready-to-use cyberattacks module. This module needs the same dependencies installed in the conda environment, so be sure to use it within the environment. To see the available attacks, run the following command:
 
@@ -253,9 +367,7 @@ optional arguments:
 
 This lists all available attacks. Attacks that correspond directly to a vehicle function (e.g., `hand_brake`, `doors`) are spoofing attacks targeting those features. You also need to specify `--period`, which defines the time interval between attack messages sent onto the virtual CAN network.
 
-### Hand brake spoofing attack
-
-To illustrate the available attacks, we start with the `hand_brake` spoofing attack. To perform it, run the following command:
+To perform the `hand_brake` spoofing attack, run the following command:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 cyberattacks_module.py --feature hand_brake --period 0.001
@@ -277,7 +389,7 @@ You can also see the practical effect of the hand_brake attack in the simulated 
 
 **Note:** To stop the attack, press `Ctrl+C` in the terminal where the command is running.
 
-### Fuzzy attack
+## Experiment #2 — Fuzzy attack
 
 Another available attack is the fuzzy attack, which consists of sending random valid messages at arbitrary intervals to trigger different vehicle functions. To conduct this attack, run the following command:
 
@@ -295,9 +407,9 @@ As a result, various vehicle functions are triggered without any keyboard input.
 
 As shown in the video, once the attack starts, vehicle functions such as doors and lights are activated randomly.
 
-### Intrusion Detection System (IDS)
+## Experiment #3 — Intrusion Detection System (IDS)
 
-The second component is the intrusion detection module. Like the cyberattacks module, it is extensible. The currently available algorithm is a simple statistical IDS that flags messages whose inter-arrival period deviates from the baseline. To see how to use it, run the following command:
+The intrusion detection module is extensible. The currently available algorithm is a simple statistical IDS that flags messages whose inter-arrival period deviates from the baseline. To see how to use it, run the following command:
 
 ```bash
 conda run --no-capture-output -n n4s_env python3 intrusion_detection_module.py --help
@@ -340,7 +452,7 @@ Total intrusions: {
 
 This output shows the count of regular messages and detected intrusions per CAN ID. Note that this algorithm is intentionally simple and may produce false positives — users are encouraged to implement more sophisticated detection methods.
 
-The figure below shows the IDS output during the hand brake spoofing attack described above:
+The figure below shows the IDS output during the hand brake spoofing attack described in Claim #1:
 
 <p align="center">
   <img src="images/carla_intrusion_detection_hand_brake_spoofing.png" alt="Intrusion detection while a hand brake spoofing attack is happening.">
@@ -362,7 +474,7 @@ You can also watch the IDS output during the fuzzy attack:
   </a>
 </p>
 
-### Collecting network traffic
+## Experiment #4 — Collecting network traffic
 
 Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Using the built-in `can-utils` tooling, this is as simple as:
 
@@ -384,6 +496,40 @@ cat candump-2026-03-28_133445.log
 
 Such logs can be used for traffic analysis and as training data for machine learning-based intrusion detection systems. As future work, we plan to generate automatically labeled captures to further support machine learning experiments.
 
+# Advanced usage - Customizing network messages and periods
+
+The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we are able to define and customize the messages that will be exchanged on the network.
+
+To bring the environment up with a custom dbc file, use the following command `./1_up_environment.sh --dbc path/to/custom.dbc`
+
+TODO: Adicionar descrições de quais sinais nós possuímos hoje em dia.
+
 ---
 
-This work was submitted for the Salão de Ferraments of Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos 2026 and is currently under revision.
+# LICENSE
+
+This project is licensed under the MIT License.
+
+```
+MIT License
+
+Copyright (c) 2025 Luigi Luz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
