@@ -7,12 +7,12 @@ class CAN_Network(object):
     door_change_state = False
     current_lights = carla.VehicleLightState.NONE
 
-    def __init__(self):
+    def __init__(self, dbc_path="data/carla.dbc"):
         self.bus = can.ThreadSafeBus(
             interface="socketcan", channel="vcan0", receive_own_messages=True
         )
         self.recvd_controls = carla.VehicleControl()
-        self.db = cantools.database.load_file("data/carla.dbc")
+        self.db = cantools.database.load_file(dbc_path)
 
     # ------------------------------------------------------------------
     # Internal helper
