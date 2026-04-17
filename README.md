@@ -168,6 +168,25 @@ The virtual CAN interface (`vcan0`) is entirely software-defined and isolated fr
 
 # Installation
 
+Run the install script once. It will handle everything, prompting you only if Miniconda is not yet present:
+
+```bash
+./0_install_dependencies.sh
+```
+
+What the script does:
+1. Installs `can-utils` via `apt-get`.
+2. Checks for `conda`; if absent, offers to download and install Miniconda automatically.
+3. Creates the `n4s_env` conda environment with Python 3.9 (skips if it already exists).
+4. Installs all Python packages from `requirements.txt` into `n4s_env`.
+5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
+
+After this step, all dependencies are installed and the platform is ready to be executed.
+
+---
+
+# Minimal Test
+
 ## Step 1 — Specifying the network messages
 
 The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we need to define the messages that will be exchanged on the network.
@@ -176,7 +195,7 @@ Since we are working with a CAN network, we use the industry-standard CAN Databa
 
 An example DBC file is shown below. In it, you can define the CAN ID, signal size and length, scale and offset, and minimum and maximum values. We also use the DBC attribute concept to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
 
-We provide a ready-to-use DBC file in the `data/carla.dbc` path. Running the platform as-is will use this DBC file.
+We provide a ready-to-use DBC file in the `data/carla.dbc` path. Running the platform as-is will use the pre-configured DBC file.
 
 ```text
 VERSION "1.0"
@@ -203,32 +222,11 @@ BA_ "GenMsgCycleTime" BO_ 1538 100;
 ...
 ```
 
-Once the DBC file is properly defined, we can move to installing the dependencies.
+Once the DBC file is properly defined, we can move to running the core simulation modules.
 
-## Step 2 — Installing dependencies
+## Step 2 — Starting the simulation environment
 
-Run the install script once. It will handle everything, prompting you only if Miniconda is not yet present:
-
-> **Disclaimer:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or Macbooks was not tested.
-
-```bash
-./0_install_dependencies.sh
-```
-
-What the script does:
-1. Installs `can-utils` via `apt-get`.
-2. Checks for `conda`; if absent, offers to download and install Miniconda automatically.
-3. Creates the `n4s_env` conda environment with Python 3.9 (skips if it already exists).
-4. Installs all Python packages from `requirements.txt` into `n4s_env`.
-5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
-
-After this step, all dependencies are installed and the platform is ready to be executed.
-
----
-
-# Minimal Test
-
-Once the installation is complete, bring the core simulation up with:
+You can bring the core simulation up with the following command:
 
 ```bash
 ./1_up_environment.sh
