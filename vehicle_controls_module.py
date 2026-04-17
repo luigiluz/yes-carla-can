@@ -36,8 +36,6 @@ try:
 except ImportError:
     raise RuntimeError("cannot import pygame, make sure pygame package is installed")
 
-DBC_PATH = "data/carla.dbc"
-
 
 def load_cycle_times(dbc_path):
     """
@@ -68,7 +66,7 @@ class KeyboardSenderControl(object):
         "GEAR": "send_gear_msg",
     }
 
-    def __init__(self, can_net, dbc_path=DBC_PATH, start_in_autopilot=False):
+    def __init__(self, can_net, dbc_path="data/carla.dbc", start_in_autopilot=False):
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
@@ -241,7 +239,7 @@ class KeyboardSenderControl(object):
         return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 
-def keyboard_parser_loop():
+def keyboard_parser_loop(dbc_path="data/carla.dbc"):
     print("Starting keyboard parser loop")
     pygame.init()
     pygame.font.init()
@@ -389,8 +387,8 @@ def keyboard_parser_loop():
     # Flush the initial drawing to screen before any potentially-blocking CAN init
     pygame.display.flip()
 
-    can_net = can_network.CAN_Network()
-    controller = KeyboardSenderControl(can_net, dbc_path=DBC_PATH)
+    can_net = can_network.CAN_Network(dbc_path=dbc_path)
+    controller = KeyboardSenderControl(can_net, dbc_path=dbc_path)
     clock = pygame.time.Clock()
     running = True
 
@@ -451,13 +449,23 @@ def print_key_bindings():
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Vehicle Controls Module")
+    parser.add_argument(
+        "--dbc",
+        default="data/carla.dbc",
+        help="Path to the DBC file (default: data/carla.dbc)",
+    )
+    args = parser.parse_args()
+
     # Ensure SIGTERM (e.g. from environment_down.sh) also exits cleanly
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
     print("Sending commands through CAN bus")
     print_key_bindings()
     try:
-        keyboard_parser_loop()
+        keyboard_parser_loop(dbc_path=args.dbc)
     except (KeyboardInterrupt, SystemExit):
         print("\nCancelled by user. Bye!")
         pygame.quit()

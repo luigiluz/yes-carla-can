@@ -3,6 +3,15 @@
 CARLA_FOLDER_NAME="${CARLA_FOLDER_NAME:-carla-0-9-15}"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-n4s_env}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DBC_PATH="${DBC_PATH:-data/carla.dbc}"
+
+# Allow overriding the DBC file via --dbc argument
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dbc) DBC_PATH="$2"; shift 2 ;;
+        *) echo "Unknown argument: $1"; exit 1 ;;
+    esac
+done
 
 # Start CARLA simulator in the background
 echo "Starting CARLA simulator..."
@@ -24,6 +33,6 @@ conda run -n "${CONDA_ENV_NAME}" python "${SCRIPT_DIR}/CARLA_client_module.py" &
 
 # Start vehicle controls module in the background
 echo "Starting vehicle controls module..."
-conda run -n "${CONDA_ENV_NAME}" python "${SCRIPT_DIR}/vehicle_controls_module.py" &
+conda run -n "${CONDA_ENV_NAME}" python "${SCRIPT_DIR}/vehicle_controls_module.py" --dbc "${DBC_PATH}" &
 
 echo "Environment is up!"
