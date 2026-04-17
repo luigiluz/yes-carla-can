@@ -303,15 +303,14 @@ Environment is down!
 
 # Experiments
 
-## Experiment #0 - Specifying the network messages through DBC files (Optional)
+For all the following experiments below, the environment must already be up (`1_up_environment.sh` has been run). Each experiment is independent and can be stopped at any time with `Ctrl+C`.
 
-The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we need to define the messages that will be exchanged on the network.
+## Experiment #0 - Defining network messages and transmission periods
 
-Since we are working with a CAN network, we use the industry-standard CAN Database (DBC) file to specify the message parameters and transmission periods.
+We use the industry-standard CAN Database (DBC) file to specify the message parameters and transmission periods. We provide a ready-to-use DBC file at [`data/carla.dbc`](data/carla.dbc). Running the platform as-is will use this pre-configured DBC file.
 
-An example DBC file is shown below. In it, you can define the CAN ID, signal size and length, scale and offset, and minimum and maximum values. We also use the DBC attribute concept to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
+A preview of the [`data/carla.dbc`](data/carla.dbc) is shown down below. In it, we define the messages' CAN IDs, signals sizes and lengths, scales and offsets, and minimum and maximum values. We use a DBC attribute to define the custom attribute "GenMsgCycleTime", which sets the transmission period of each message. For more information on DBC file syntax, see [CSS Electronics — CAN DBC File Explained](https://www.csselectronics.com/pages/can-dbc-file-database-intro).
 
-We provide a ready-to-use DBC file in the `data/carla.dbc` path. Running the platform as-is will use the pre-configured DBC file.
 
 ```text
 VERSION "1.0"
@@ -338,9 +337,9 @@ BA_ "GenMsgCycleTime" BO_ 1538 100;
 ...
 ```
 
-Once the DBC file is properly defined, we can move to running the core simulation modules.
+**Note:** For more details on how to create custom DBC files, refer to the [Advanced usage - Customizing network messages and periods](#advanced-usage---customizing-network-messages-and-periods) section.
 
-For all the following experiments below, the environment must already be up (`1_up_environment.sh` has been run). Each experiment is independent and can be stopped at any time with `Ctrl+C`.
+The following experiments consider the usage of the default [`data/carla.dbc`](data/carla.dbc) file.
 
 ## Experiment #1 — Hand brake spoofing attack
 
@@ -496,6 +495,14 @@ cat candump-2026-03-28_133445.log
 ```
 
 Such logs can be used for traffic analysis and as training data for machine learning-based intrusion detection systems. As future work, we plan to generate automatically labeled captures to further support machine learning experiments.
+
+# Advanced usage - Customizing network messages and periods
+
+The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we are able to define and customize the messages that will be exchanged on the network.
+
+To bring the environment up with a custom dbc file, use the following command `./1_up_environment.sh --dbc path/to/custom.dbc`
+
+TODO: Adicionar descrições de quais sinais nós possuímos hoje em dia.
 
 ---
 
