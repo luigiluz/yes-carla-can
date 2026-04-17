@@ -29,6 +29,66 @@ The modules in execution will look like the ones in the following image:
   <img src="images/running-platform.png" alt="Yes, CARLA CAN — platform running with all modules">
 </p>
 
+The following section maps each of these modules to their corresponding files and directories in the repository.
+
+## Repository organization
+
+```
+yes-carla-can/
+│
+├── 0_install_dependencies.sh     # Installs all system and Python dependencies
+├── 1_up_environment.sh           # Starts CARLA, vcan0, and the core modules
+├── 2_down_environment.sh         # Tears down the simulation environment cleanly
+│
+├── CARLA_client_module.py        # Connects to CARLA, spawns the ego vehicle and sensors
+├── vehicle_controls_module.py    # Translates keyboard input into CAN frames on vcan0
+├── cyberattacks_module.py        # CLI entry point for injecting attack traffic onto vcan0
+├── intrusion_detection_module.py # CLI entry point for running IDS algorithms on vcan0
+│
+├── requirements.txt              # Python package dependencies
+│
+├── attacks/                      # Attack algorithm implementations
+│   ├── denial_of_service.py      #   DoS flooding attack
+│   └── reverse_engineering.py    #   Feature spoofing via reverse-engineered CAN IDs
+│
+├── can_network/                  # CAN network abstraction layer
+│   ├── network.py                #   SocketCAN interface (send/receive frames)
+│   ├── comm_matrix.py            #   DBC-derived communication matrix
+│   ├── constants.py              #   Shared CAN constants
+│   └── utils.py                  #   Helper utilities
+│
+├── defense/                      # IDS algorithm implementations
+│   └── id_time_intrusion_detection.py  # Statistical inter-arrival time detector
+│
+├── gui/                          # Graphical interface components
+│   ├── world.py                  #   CARLA world and vehicle management
+│   ├── hud.py                    #   On-screen heads-up display
+│   ├── camera_manager.py         #   Camera sensor rendering
+│   ├── can_traffic_display.py    #   Live CAN traffic dashboard (Dash)
+│   ├── keyboard_control.py       #   Keyboard input handler
+│   ├── functions.py              #   GUI utility functions
+│   └── text.py                   #   Text rendering helpers
+│
+├── sensors/                      # CARLA sensor wrappers
+│   ├── collision.py              #   Collision sensor
+│   ├── gnss.py                   #   GNSS (GPS) sensor
+│   ├── imu.py                    #   IMU sensor
+│   ├── lane_invasion.py          #   Lane invasion sensor
+│   └── radar.py                  #   Radar sensor
+│
+├── data/                         # Network data and analysis
+│   ├── carla.dbc                 #   DBC file defining the virtual CAN network schema
+│   ├── motohawk.dbc              #   Reference DBC file
+│   ├── candump_parsed.csv        #   Example parsed CAN traffic log
+│   ├── can_ids_statistics.json   #   Per-ID timing statistics (baseline)
+│   ├── can_bus_data_analyzer.py  #   Traffic analysis script
+│   └── candump_csv_parser.py     #   Parser for candump log files
+│
+├── carla-0-9-15/                 # CARLA 0.9.15 simulator installation (downloaded by script)
+│
+└── images/                       # Images used in this README
+```
+
 ---
 
 # README Structure
