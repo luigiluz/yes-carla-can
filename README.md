@@ -35,14 +35,14 @@ The modules in execution will look like the ones in the following image:
 
 This README is organized as follows:
 
-- **Considered Seals**: the evaluation seals being requested for this artifact submission.
-- **Basic Information**: hardware and software environment used to develop and test the platform.
-- **Dependencies**: software packages and tools required to run the platform.
-- **Security Concerns**: security notes for reviewers running the artifact.
-- **Installation**: step-by-step process to download and install the platform.
-- **Minimal Test**: minimal execution test to verify a successful installation.
-- **Experiments**: step-by-step reproduction of the paper's demonstrations.
-- **LICENSE**: the project's open-source license.
+- [**Considered Seals**](#considered-seals): the evaluation seals being requested for this artifact submission.
+- [**Basic Information**](#basic-information): hardware and software environment used to develop and test the platform.
+- [**Dependencies**](#dependencies): software packages and tools required to run the platform.
+- [**Security Concerns**](#security-concerns): security notes for reviewers running the artifact.
+- [**Installation**](#installation): step-by-step process to download and install the platform.
+- [**Minimal Test**](#minimal-test): minimal execution test to verify a successful installation.
+- [**Experiments**](#experiments): step-by-step reproduction of the paper's demonstrations.
+- [**LICENSE**](#license): the project's open-source license.
 
 ---
 
