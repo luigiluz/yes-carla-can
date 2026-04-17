@@ -126,7 +126,7 @@ The considered seals are: Available, Functional, Sustainable, and Reproducible.
 
 | Component | Specification |
 |---|---|
-| **OS** | Ubuntu/Debian-based Linux (tested on Debian GNU/Linux 13 — Trixie) |
+| **OS** | Ubuntu/Debian-based Linux (tested on Debian GNU/Linux 13 — Trixie and Ubuntu 22.04 LTS Jammy Jellyfish) |
 | **Package manager** | conda / Miniconda |
 | **Python** | 3.9 |
 
