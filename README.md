@@ -2,7 +2,7 @@
 
 **Yes, CARLA CAN** is an automotive cybersecurity experimentation platform that extends the [CARLA](https://carla.org/) driving simulator with a virtual [CAN bus](https://en.wikipedia.org/wiki/CAN_bus). It lets you run attack and defense experiments against a simulated vehicle network without any dedicated hardware.
 
-This work was submitted for the Salão de Ferramentas of Simpósio Brasileiro de Redes de Computadores e Sistemas Distribuídos 2026 and is currently under revision.
+This work was submitted for the Tools Session (Salão de Ferramentas) of the Brazilian Symposium on Computer Networks and Distributed Systems (SBRC) 2026 and is currently under revision.
 
 ## Architecture overview
 
@@ -31,28 +31,28 @@ The modules in execution will look like the ones in the following image:
 
 ---
 
-# Estrutura do readme.md
+# README Structure
 
 This README is organized as follows:
 
-- **Selos Considerados**: the evaluation seals being requested for this artifact submission.
-- **Informações básicas**: hardware and software environment used to develop and test the platform.
-- **Dependências**: software packages and tools required to run the platform.
-- **Preocupações com segurança**: security notes for reviewers running the artifact.
-- **Instalação**: step-by-step process to download and install the platform.
-- **Teste mínimo**: minimal execution test to verify a successful installation.
-- **Experimentos**: step-by-step reproduction of the paper's demonstrations.
+- **Considered Seals**: the evaluation seals being requested for this artifact submission.
+- **Basic Information**: hardware and software environment used to develop and test the platform.
+- **Dependencies**: software packages and tools required to run the platform.
+- **Security Concerns**: security notes for reviewers running the artifact.
+- **Installation**: step-by-step process to download and install the platform.
+- **Minimal Test**: minimal execution test to verify a successful installation.
+- **Experiments**: step-by-step reproduction of the paper's demonstrations.
 - **LICENSE**: the project's open-source license.
 
 ---
 
-# Selos Considerados
+# Considered Seals
 
-Os selos considerados são: Disponíveis, Funcionais, Sustentáveis e Reprodutíveis.
+The considered seals are: Available, Functional, Sustainable, and Reproducible.
 
 ---
 
-# Informações básicas
+# Basic Information
 
 **Hardware** (tested configuration):
 
@@ -74,7 +74,7 @@ Os selos considerados são: Disponíveis, Funcionais, Sustentáveis e Reprodutí
 
 ---
 
-# Dependências
+# Dependencies
 
 "Yes, CARLA CAN" depends on the following software components:
 
@@ -91,11 +91,11 @@ Os selos considerados são: Disponíveis, Funcionais, Sustentáveis e Reprodutí
 | **CARLA 0.9.15** | 0.9.15 | Autonomous driving simulator (server) |
 | **can-utils** | Linux system package | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
 
-All Python packages are listed in `requirements.txt`. The full installation is handled automatically by the provided script — see the [Instalação](#instalação) section.
+All Python packages are listed in `requirements.txt`. The full installation is handled automatically by the provided script — see the [Installation](#installation) section.
 
 ---
 
-# Preocupações com segurança
+# Security Concerns
 
 The installation and setup process requires elevated privileges (`sudo`) on the reviewer's machine for two operations:
 
@@ -106,7 +106,7 @@ The virtual CAN interface (`vcan0`) is entirely software-defined and isolated fr
 
 ---
 
-# Instalação
+# Installation
 
 ## Step 1 — Specifying the network messages
 
@@ -166,7 +166,7 @@ After this step, all dependencies are installed and the platform is ready to be 
 
 ---
 
-# Teste mínimo
+# Minimal Test
 
 Once the installation is complete, bring the core simulation up with:
 
@@ -282,11 +282,11 @@ Environment is down!
 
 ---
 
-# Experimentos
+# Experiments
 
 For all experiments below, the environment must already be up (`1_up_environment.sh` has been run). Each experiment is independent and can be stopped at any time with `Ctrl+C`.
 
-## Reivindicações #1 — Hand brake spoofing attack
+## Claim #1 — Hand brake spoofing attack
 
 As part of the cybersecurity experimentation, we provide a ready-to-use cyberattacks module. This module needs the same dependencies installed in the conda environment, so be sure to use it within the environment. To see the available attacks, run the following command:
 
@@ -334,7 +334,7 @@ You can also see the practical effect of the hand_brake attack in the simulated 
 
 **Note:** To stop the attack, press `Ctrl+C` in the terminal where the command is running.
 
-## Reivindicações #2 — Fuzzy attack
+## Claim #2 — Fuzzy attack
 
 Another available attack is the fuzzy attack, which consists of sending random valid messages at arbitrary intervals to trigger different vehicle functions. To conduct this attack, run the following command:
 
@@ -352,7 +352,7 @@ As a result, various vehicle functions are triggered without any keyboard input.
 
 As shown in the video, once the attack starts, vehicle functions such as doors and lights are activated randomly.
 
-## Reivindicações #3 — Intrusion Detection System (IDS)
+## Claim #3 — Intrusion Detection System (IDS)
 
 The intrusion detection module is extensible. The currently available algorithm is a simple statistical IDS that flags messages whose inter-arrival period deviates from the baseline. To see how to use it, run the following command:
 
@@ -397,7 +397,7 @@ Total intrusions: {
 
 This output shows the count of regular messages and detected intrusions per CAN ID. Note that this algorithm is intentionally simple and may produce false positives — users are encouraged to implement more sophisticated detection methods.
 
-The figure below shows the IDS output during the hand brake spoofing attack described in Reivindicações #1:
+The figure below shows the IDS output during the hand brake spoofing attack described in Claim #1:
 
 <p align="center">
   <img src="images/carla_intrusion_detection_hand_brake_spoofing.png" alt="Intrusion detection while a hand brake spoofing attack is happening.">
@@ -419,7 +419,7 @@ You can also watch the IDS output during the fuzzy attack:
   </a>
 </p>
 
-## Reivindicações #4 — Collecting network traffic
+## Claim #4 — Collecting network traffic
 
 Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Using the built-in `can-utils` tooling, this is as simple as:
 
