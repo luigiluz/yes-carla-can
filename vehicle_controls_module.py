@@ -171,7 +171,7 @@ class KeyboardSenderControl(object):
                     current_lights ^= carla.VehicleLightState.LeftBlinker
                 elif event.key == K_x:
                     current_lights ^= carla.VehicleLightState.RightBlinker
-                if event.key == K_q:
+                elif event.key == K_q:
                     if not self._ackermann_enabled:
                         self._control.gear = 1 if self._control.reverse else -1
                     else:
