@@ -49,6 +49,7 @@ def _print_status(attack_type: str, feature: str, sent: int, rate: float, last_m
 # ---------------------------------------------------------------------------
 
 def denial_of_service_func(bus, period: float):
+    """Flood the CAN bus with high-priority empty frames at the given period."""
     sent = 0
     t0 = time.monotonic()
     while True:
@@ -61,6 +62,7 @@ def denial_of_service_func(bus, period: float):
 
 
 def fuzzy_attack_func(bus):
+    """Send random known-valid CAN messages at random intervals."""
     known_attacks = list(FEATURE_CAN_ID_PAYLOAD_MAPPER.keys())
     sent = 0
     t0 = time.monotonic()
@@ -77,6 +79,7 @@ def fuzzy_attack_func(bus):
 
 
 def spoofing_attacks_func(bus, feature: str, period: float):
+    """Continuously inject a spoofed CAN message for the given feature."""
     selected_feature = FEATURE_CAN_ID_PAYLOAD_MAPPER[feature]
     sent = 0
     t0 = time.monotonic()

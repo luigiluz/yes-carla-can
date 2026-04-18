@@ -5,6 +5,8 @@ from can_network.dbc import load_and_validate, REQUIRED_SIGNALS
 
 
 class CAN_Network(object):
+    """Interface to the virtual CAN bus backed by a DBC message schema."""
+
     door_change_state = False
     current_lights = carla.VehicleLightState.NONE
 
@@ -93,6 +95,7 @@ class CAN_Network(object):
         return self.door_change_state
 
     def recv_msg(self):
+        """Read all pending CAN frames and update recvd_controls accordingly."""
         try:
             recv_msg = self.bus.recv(timeout=0)
         except can.CanOperationError:
