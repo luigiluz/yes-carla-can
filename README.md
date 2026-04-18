@@ -498,11 +498,69 @@ Such logs can be used for traffic analysis and as training data for machine lear
 
 # Advanced usage - Customizing network messages and periods
 
-The main contribution of this work is to bring in-vehicle network (specifically CAN network) concepts into the CARLA driving simulation. To do so, we are able to define and customize the messages that will be exchanged on the network.
+The virtual CAN network is configured via a DBC file. You can change CAN IDs and transmission periods without touching any code, which is useful, for example, when evaluating how well a detection algorithm generalises to a different network configuration.
 
-To bring the environment up with a custom dbc file, use the following command `./1_up_environment.sh --dbc path/to/custom.dbc`
+## Supported messages and signals
 
-TODO: Adicionar descrições de quais sinais nós possuímos hoje em dia.
+The platform currently supports a fixed set of messages. The DBC file must define **all required messages** (with the exact signal names listed below) for the platform to start. Optional messages may be omitted. Signal names must match exactly — the platform validates them at startup and exits with a clear error if they don't.
+
+| Message name | Signal name | Required | Default period | Description |
+|---|---|---|---|---|
+| `THROTTLE` | `THROTTLE_signal` | ✅ Yes | 100 ms | Throttle value (0–255, maps to 0–100%) |
+| `BRAKE` | `BRAKE_signal` | ✅ Yes | 100 ms | Brake value (0–255, maps to 0–100%) |
+| `STEER` | `STEER_signal` | ✅ Yes | 100 ms | Steering angle (0–255, maps to -100%–+100%) |
+| `REVERSE` | `REVERSE_signal` | ✅ Yes | 200 ms | Reverse gear active (0 = off, 1 = on) |
+| `HAND_BRAKE` | `HAND_BRAKE_signal` | ✅ Yes | 200 ms | Hand brake active (0 = off, 1 = on) |
+| `MANUAL_TRANSMISSION` | `MANUAL_TRANSMISSION_signal` | ✅ Yes | 500 ms | Manual gear shift enabled (0 = off, 1 = on) |
+| `GEAR` | `GEAR_signal` | ✅ Yes | 200 ms | Current gear value |
+| `DOORS` | `DOORS_signal` | ❌ Optional | event-driven | Door open/close toggle |
+| `GENERAL_LIGHTS` | `GENERAL_LIGHTS_signal` | ❌ Optional | event-driven | Light state bitmask (0–255) |
+
+> Messages marked as **Required** must be present in any custom DBC file or the platform will refuse to start.
+> Messages with **event-driven** period are sent only when the value changes, not periodically.
+
+## What you can customise
+
+While the message names and signal names are fixed by the platform, you are free to change:
+
+- **CAN IDs** — assign any arbitration ID to any message (e.g. change `THROTTLE` from `0x600` to `0x1A0`)
+- **Transmission periods** — change the `GenMsgCycleTime` attribute to alter how frequently each message is sent
+
+Changing CAN IDs and transmission periods is the primary way to experiment with network behaviour, such as bus load and arbitration.
+
+## Example: changing a CAN ID and transmission period
+
+The snippet below shows a minimal valid custom DBC that reassigns `THROTTLE` to CAN ID `0x100` and changes its period to 50 ms, while keeping all other messages unchanged:
+
+```text
+VERSION ""
+
+BU_: ECU
+
+BO_ 256 THROTTLE: 4 ECU
+ SG_ THROTTLE_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+
+... (remaining messages from data/carla.dbc) ...
+
+BA_DEF_ BO_  "GenMsgCycleTime" INT 0 10000;
+BA_DEF_DEF_  "GenMsgCycleTime" 0;
+
+BA_ "GenMsgCycleTime" BO_ 256 50;   ← THROTTLE now at 50 ms
+... (remaining cycle times) ...
+```
+
+Save it as e.g. `data/my_custom.dbc` and run:
+
+```bash
+./1_up_environment.sh --dbc data/my_custom.dbc
+```
+
+The platform will print a startup summary showing which messages were loaded and their scheduled periods:
+
+```
+[CAN] DBC loaded: data/my_custom.dbc
+[CAN] Periodic messages scheduled: BRAKE(100ms) GEAR(200ms) HAND_BRAKE(200ms) MANUAL_TRANSMISSION(500ms) REVERSE(200ms) STEER(100ms) THROTTLE(50ms)
+```
 
 ---
 
