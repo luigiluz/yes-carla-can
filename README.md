@@ -144,7 +144,6 @@ The considered seals are: Available, Functional, Sustainable, and Reproducible.
 | **python-can** | see `requirements.txt` | SocketCAN interface for sending/receiving CAN frames |
 | **dash** | see `requirements.txt` | Web-based CAN traffic visualisation dashboard |
 | **matplotlib** | see `requirements.txt` | Plotting and data visualisation |
-| **scikit-learn** | see `requirements.txt` | Machine learning utilities for IDS |
 | **CARLA 0.9.15** | 0.9.15 | Autonomous driving simulator (server) |
 | **can-utils** | Linux system package | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
 
