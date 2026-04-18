@@ -1,6 +1,7 @@
 import can
-import cantools
 import carla
+
+from can_network.dbc import load_and_validate, REQUIRED_SIGNALS
 
 
 class CAN_Network(object):
@@ -12,18 +13,26 @@ class CAN_Network(object):
             interface="socketcan", channel="vcan0", receive_own_messages=True
         )
         self.recvd_controls = carla.VehicleControl()
-        self.db = cantools.database.load_file(dbc_path)
+        self.db, self.cycle_times = load_and_validate(dbc_path)
 
     # ------------------------------------------------------------------
     # Internal helper
     # ------------------------------------------------------------------
 
-    def _build_msg(self, message_name, signal_values: dict) -> can.Message:
-        """Encode a CAN message from the DBC and return a can.Message ready to send."""
-        dbc_msg = self.db.get_message_by_name(message_name)
+    def _build_msg(self, message_name, value) -> can.Message:
+        """Encode a single-signal CAN message from the DBC and return a can.Message ready to send."""
+        try:
+            dbc_msg = self.db.get_message_by_name(message_name)
+        except KeyError:
+            available = [m.name for m in self.db.messages]
+            raise RuntimeError(
+                f"[CAN] Message '{message_name}' not found in DBC. "
+                f"Available: {available}"
+            ) from None
+        signal_name = REQUIRED_SIGNALS[message_name]
         return can.Message(
             arbitration_id=dbc_msg.frame_id,
-            data=dbc_msg.encode(signal_values),
+            data=dbc_msg.encode({signal_name: value}),
             is_extended_id=dbc_msg.is_extended_frame,
         )
 
@@ -32,58 +41,33 @@ class CAN_Network(object):
     # ------------------------------------------------------------------
 
     def send_switch_door_state_msg(self):
-        self.bus.send(self._build_msg("DOORS", {"DOORS_signal": True}))
+        self.bus.send(self._build_msg("DOORS", True))
 
     def send_current_lights_msg(self, lights):
-        # GENERAL_LIGHTS_signal is 8-bit (0-255). VehicleLightState values above
-        # 0xFF (Interior=256, Special1=512) are carla-only and not in the DBC,
-        # so mask them out before encoding.
-        value = int(lights) & 0xFF
-        self.bus.send(
-            self._build_msg("GENERAL_LIGHTS", {"GENERAL_LIGHTS_signal": value})
-        )
+        # VehicleLightState values above 0xFF are carla-only and not in the DBC;
+        # mask them out before encoding.
+        self.bus.send(self._build_msg("GENERAL_LIGHTS", int(lights) & 0xFF))
 
     def send_throttle_msg(self, controls):
-        self.bus.send(
-            self._build_msg(
-                "THROTTLE", {"THROTTLE_signal": int(controls.throttle * 255)}
-            )
-        )
+        self.bus.send(self._build_msg("THROTTLE", int(controls.throttle * 255)))
 
     def send_steer_msg(self, controls):
-        self.bus.send(
-            self._build_msg(
-                "STEER", {"STEER_signal": int((controls.steer + 1) / 2 * 255)}
-            )
-        )
+        self.bus.send(self._build_msg("STEER", int((controls.steer + 1) / 2 * 255)))
 
     def send_brake_msg(self, controls):
-        self.bus.send(
-            self._build_msg("BRAKE", {"BRAKE_signal": int(controls.brake * 255)})
-        )
+        self.bus.send(self._build_msg("BRAKE", int(controls.brake * 255)))
 
     def send_hand_brake_msg(self, controls):
-        self.bus.send(
-            self._build_msg(
-                "HAND_BRAKE", {"HAND_BRAKE_signal": int(controls.hand_brake)}
-            )
-        )
+        self.bus.send(self._build_msg("HAND_BRAKE", int(controls.hand_brake)))
 
     def send_reverse_msg(self, controls):
-        self.bus.send(
-            self._build_msg("REVERSE", {"REVERSE_signal": int(controls.reverse)})
-        )
+        self.bus.send(self._build_msg("REVERSE", int(controls.reverse)))
 
     def send_manual_transmission_msg(self, controls):
-        self.bus.send(
-            self._build_msg(
-                "MANUAL_TRANSMISSION",
-                {"MANUAL_TRANSMISSION_signal": int(controls.manual_gear_shift)},
-            )
-        )
+        self.bus.send(self._build_msg("MANUAL_TRANSMISSION", int(controls.manual_gear_shift)))
 
     def send_gear_msg(self, controls):
-        self.bus.send(self._build_msg("GEAR", {"GEAR_signal": int(controls.gear)}))
+        self.bus.send(self._build_msg("GEAR", int(controls.gear)))
 
     def send_autopilot_msg(self, controls):
         # controls.autopilot is not a standard VehicleControl field;
@@ -119,42 +103,41 @@ class CAN_Network(object):
             try:
                 dbc_msg = self.db.get_message_by_frame_id(recv_msg.arbitration_id)
             except KeyError:
+                print(f"[CAN] INFO: Received unknown arbitration_id 0x{recv_msg.arbitration_id:X}, skipping")
                 recv_msg = self.bus.recv(timeout=0)
                 continue
 
             name = dbc_msg.name
 
             if name == "THROTTLE":
-                self.recvd_controls.throttle = data["THROTTLE_signal"] / 255.0
+                self.recvd_controls.throttle = data[REQUIRED_SIGNALS["THROTTLE"]] / 255.0
 
             elif name == "STEER":
-                self.recvd_controls.steer = (data["STEER_signal"] / 255.0) * 2 - 1
+                self.recvd_controls.steer = (data[REQUIRED_SIGNALS["STEER"]] / 255.0) * 2 - 1
 
             elif name == "BRAKE":
-                self.recvd_controls.brake = data["BRAKE_signal"] / 255.0
+                self.recvd_controls.brake = data[REQUIRED_SIGNALS["BRAKE"]] / 255.0
 
             elif name == "HAND_BRAKE":
-                self.recvd_controls.hand_brake = bool(data["HAND_BRAKE_signal"])
+                self.recvd_controls.hand_brake = bool(data[REQUIRED_SIGNALS["HAND_BRAKE"]])
 
             elif name == "REVERSE":
-                self.recvd_controls.reverse = bool(data["REVERSE_signal"])
+                self.recvd_controls.reverse = bool(data[REQUIRED_SIGNALS["REVERSE"]])
 
             elif name == "MANUAL_TRANSMISSION":
-                self.recvd_controls.manual_gear_shift = bool(
-                    data["MANUAL_TRANSMISSION_signal"]
-                )
+                self.recvd_controls.manual_gear_shift = bool(data[REQUIRED_SIGNALS["MANUAL_TRANSMISSION"]])
 
             elif name == "GEAR":
-                self.recvd_controls.gear = int(data["GEAR_signal"])
+                self.recvd_controls.gear = int(data[REQUIRED_SIGNALS["GEAR"]])
 
             elif name == "DOORS":
-                if data["DOORS_signal"]:
+                if data[REQUIRED_SIGNALS["DOORS"]]:
                     print(data)
                     self.door_change_state = True
 
             elif name == "GENERAL_LIGHTS":
                 self.current_lights = carla.VehicleLightState(
-                    int(data["GENERAL_LIGHTS_signal"])
+                    int(data[REQUIRED_SIGNALS["GENERAL_LIGHTS"]])
                 )
 
             try:
