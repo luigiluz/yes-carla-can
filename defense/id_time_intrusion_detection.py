@@ -39,6 +39,8 @@ class QueueStats:
         return len(self.queue)
 
 class IdTimeIntrusionDetection():
+    """Statistical IDS that flags CAN messages whose inter-arrival time deviates from a baseline."""
+
     def __init__(self):
         self.intrusion_counter = {}
         self.regular_counter = 0
@@ -46,7 +48,7 @@ class IdTimeIntrusionDetection():
         self._last_alert = ""
 
     def load(self, path=None):
-        # Load json file
+        """Load baseline CAN ID timing statistics from a JSON file."""
         with open(path, 'r') as f:
             can_ids_statistics = json.load(f)
 
@@ -56,6 +58,7 @@ class IdTimeIntrusionDetection():
         self.running_statistics = {}
 
     def run(self, message):
+        """Evaluate a single CAN message and update intrusion/regular counters."""
         id = str(hex(message.arbitration_id))
         timestamp = message.timestamp
 
