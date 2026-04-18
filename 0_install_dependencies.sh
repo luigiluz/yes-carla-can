@@ -9,8 +9,13 @@ echo "Installing \"Yes, CARLA CAN\" project dependencies..."
 # ------------------------------------------------------------------
 # 1. System packages
 # ------------------------------------------------------------------
-echo "Installing can-utils..."
-sudo apt-get install -y can-utils
+echo "Installing system packages..."
+sudo apt-get install -y \
+    can-utils \
+    curl \
+    wget \
+    libvulkan1 \
+    mesa-vulkan-drivers
 
 # ------------------------------------------------------------------
 # 2. Miniconda (optional)
