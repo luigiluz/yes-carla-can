@@ -52,10 +52,8 @@ yes-carla-can/
 │   └── reverse_engineering.py    #   Feature spoofing via reverse-engineered CAN IDs
 │
 ├── can_network/                  # CAN network abstraction layer
-│   ├── network.py                #   SocketCAN interface (send/receive frames)
-│   ├── comm_matrix.py            #   DBC-derived communication matrix
-│   ├── constants.py              #   Shared CAN constants
-│   └── utils.py                  #   Helper utilities
+│   ├── dbc.py                    #   DBC loading, validation, and message definitions
+│   └── network.py                #   SocketCAN interface (send/receive frames)
 │
 ├── defense/                      # IDS algorithm implementations
 │   └── id_time_intrusion_detection.py  # Statistical inter-arrival time detector
@@ -78,9 +76,6 @@ yes-carla-can/
 │
 ├── data/                         # Network data and analysis
 │   ├── carla.dbc                 #   DBC file defining the virtual CAN network schema
-│   ├── motohawk.dbc              #   Reference DBC file
-│   ├── candump_parsed.csv        #   Example parsed CAN traffic log
-│   ├── can_ids_statistics.json   #   Per-ID timing statistics (baseline)
 │   ├── can_bus_data_analyzer.py  #   Traffic analysis script
 │   └── candump_csv_parser.py     #   Parser for candump log files
 │
