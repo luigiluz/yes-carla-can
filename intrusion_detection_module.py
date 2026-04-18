@@ -7,7 +7,7 @@ DETECTOR_FACTORY = {
     "id_time": IdTimeIntrusionDetection
 }
 
-DATA_PATH = Path(__file__).parent / "data" / "can_ids_statistics_periodic_0.2.json"
+DATA_PATH = Path(__file__).parent / "data" / "candump-2026-04-17_225932_parsed_statistics.json"
 
 def main():
     print("Intrusion Detection System for CAN Bus")

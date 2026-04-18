@@ -1,7 +1,6 @@
 import pandas as pd
 
-#CANDUMP_FILEPATH = "/home/luigi/workspace/nerd_for_speed/data/carla_can_bus.log"
-CANDUMP_FILEPATH = "/home/luigi/workspace/nerd_for_speed/data/can_bus_periodic_0.2_logs.log"
+CANDUMP_FILEPATH = "candump-2026-04-17_225932.log"
 
 def main():
     print("candump csv parser")
@@ -26,7 +25,7 @@ def main():
     df = pd.DataFrame(data)
 
     # Export to csv
-    filename = 'periodic_0.2_candump_parsed'
+    filename = CANDUMP_FILEPATH.rsplit('.', 1)[0] + '_parsed'
     df.to_csv(f'{filename}.csv', index=False)
     print(f"candump csv parser finished. Data exported to {filename}.csv")
 
