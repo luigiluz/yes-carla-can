@@ -3,10 +3,10 @@ import sys
 import time
 import tkinter as tk
 
-import cantools
 import carla
 
 import can_network
+from can_network.dbc import MESSAGE_SENDERS
 
 try:
     import pygame
@@ -37,36 +37,10 @@ except ImportError:
     raise RuntimeError("cannot import pygame, make sure pygame package is installed")
 
 
-def load_cycle_times(dbc_path):
-    """
-    Parse the DBC and return a dict of {message_name: cycle_time_seconds}.
-    Messages with GenMsgCycleTime == 0 are considered event-driven (not periodic).
-    """
-    db = cantools.database.load_file(dbc_path)
-    cycle_times = {}
-    for msg in db.messages:
-        cycle_ms = msg.cycle_time  # cantools reads GenMsgCycleTime automatically
-        if cycle_ms and cycle_ms > 0:
-            cycle_times[msg.name] = cycle_ms / 1000.0  # convert ms → seconds
-    return cycle_times
-
-
 class KeyboardSenderControl(object):
     """Class that handles keyboard input and periodic CAN message sending."""
 
-    # Maps DBC message name → CAN_Network method name to call
-    MESSAGE_SENDERS = {
-        "THROTTLE": "send_throttle_msg",
-        "BRAKE": "send_brake_msg",
-        "STEER": "send_steer_msg",
-        "REVERSE": "send_reverse_msg",
-        "HAND_BRAKE": "send_hand_brake_msg",
-        "AUTOPILOT": "send_autopilot_msg",
-        "MANUAL_TRANSMISSION": "send_manual_transmission_msg",
-        "GEAR": "send_gear_msg",
-    }
-
-    def __init__(self, can_net, dbc_path="data/carla.dbc", start_in_autopilot=False):
+    def __init__(self, can_net, start_in_autopilot=False):
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
@@ -79,14 +53,13 @@ class KeyboardSenderControl(object):
 
         self._steer_cache = 0.0
 
-        # Load per-message cycle times from DBC and initialise last-sent timestamps.
-        cycle_times = load_cycle_times(dbc_path)
+        # Build per-message timers from cycle times already loaded by CAN_Network.
         now = time.time()
         # _msg_timers: {msg_name: [interval_seconds, last_sent_timestamp]}
         self._msg_timers = {
             name: [interval, now]
-            for name, interval in cycle_times.items()
-            if name in self.MESSAGE_SENDERS
+            for name, interval in can_net.cycle_times.items()
+            if name in MESSAGE_SENDERS
         }
 
     # ------------------------------------------------------------------
@@ -98,7 +71,7 @@ class KeyboardSenderControl(object):
         now = time.time()
         for msg_name, (interval, last_sent) in self._msg_timers.items():
             if now - last_sent >= interval:
-                method = getattr(self._can_net, self.MESSAGE_SENDERS[msg_name], None)
+                method = getattr(self._can_net, MESSAGE_SENDERS[msg_name], None)
                 if method is not None:
                     try:
                         method(self._control)
@@ -388,7 +361,10 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc"):
     pygame.display.flip()
 
     can_net = can_network.CAN_Network(dbc_path=dbc_path)
-    controller = KeyboardSenderControl(can_net, dbc_path=dbc_path)
+    controller = KeyboardSenderControl(can_net)
+    scheduled = [f"{name}({int(iv[0] * 1000)}ms)" for name, iv in sorted(controller._msg_timers.items())]
+    print(f"[CAN] DBC loaded: {dbc_path}")
+    print(f"[CAN] Periodic messages scheduled: {' '.join(scheduled)}")
     clock = pygame.time.Clock()
     running = True
 
