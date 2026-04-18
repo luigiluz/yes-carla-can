@@ -125,6 +125,8 @@ The considered seals are: Available, Functional, Sustainable, and Reproducible.
 | **Package manager** | conda / Miniconda |
 | **Python** | 3.9 |
 
+> **Note:** Python 3.9 is managed by conda inside the `n4s_env` environment created by the install script. You do not need to change or downgrade your system Python.
+
 > **Note:** All experiments were conducted on Ubuntu/Debian systems. Behaviour on Windows/WSL or macOS was not tested.
 
 ---
@@ -136,7 +138,7 @@ The considered seals are: Available, Functional, Sustainable, and Reproducible.
 | Dependency | Version | Purpose |
 |---|---|---|
 | **conda / Miniconda** | any | Python virtual environment management |
-| **Python** | 3.9 | Runtime (required by several libraries) |
+| **Python** | 3.9 | Runtime (managed by conda inside `n4s_env`) |
 | **carla** | 0.9.15 | Python client for the CARLA simulator |
 | **cantools** | see `requirements.txt` | DBC file parsing and CAN frame encoding/decoding |
 | **python-can** | see `requirements.txt` | SocketCAN interface for sending/receiving CAN frames |
