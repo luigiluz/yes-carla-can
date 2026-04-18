@@ -146,6 +146,10 @@ The considered seals are: Available, Functional, Sustainable, and Reproducible.
 | **matplotlib** | see `requirements.txt` | Plotting and data visualisation |
 | **CARLA 0.9.15** | 0.9.15 | Autonomous driving simulator (server) |
 | **can-utils** | Linux system package | Kernel modules and CLI tools for the virtual CAN interface (`vcan0`) |
+| **libvulkan1** | Linux system package | Vulkan runtime required by the CARLA (UE4) binary, even in headless/offscreen mode |
+| **mesa-vulkan-drivers** | Linux system package | Mesa Vulkan ICD; provides the software Vulkan implementation on machines without a discrete GPU |
+| **curl** | Linux system package | Used by the install script to download the Miniconda installer |
+| **wget** | Linux system package | Used by the install script to download the CARLA binary |
 
 All Python packages are listed in `requirements.txt`. The full installation is handled automatically by the provided script — see the [Installation](#installation) section.
 
@@ -155,7 +159,7 @@ All Python packages are listed in `requirements.txt`. The full installation is h
 
 The installation and setup process requires elevated privileges (`sudo`) on the user's machine for two operations:
 
-1. **System package installation**: `0_install_dependencies.sh` calls `apt-get install can-utils`, which requires `sudo` access.
+1. **System package installation**: `0_install_dependencies.sh` calls `apt-get install` for `can-utils`, `curl`, `wget`, `libvulkan1`, and `mesa-vulkan-drivers`, which requires `sudo` access.
 2. **Kernel module loading**: `1_up_environment.sh` loads the `vcan` Linux kernel module via `modprobe vcan` and creates a virtual network interface (`vcan0`), which also requires `sudo`.
 
 The virtual CAN interface (`vcan0`) is entirely software-defined and isolated from any real vehicle network and from the internet. It poses no risk to physical hardware or external systems.
@@ -171,7 +175,7 @@ Run the install script once. It will handle everything, prompting you only if Mi
 ```
 
 What the script does:
-1. Installs `can-utils` via `apt-get`.
+1. Installs `can-utils`, `curl`, `wget`, `libvulkan1`, and `mesa-vulkan-drivers` via `apt-get`.
 2. Checks for `conda`; if absent, offers to download and install Miniconda automatically.
 3. Creates the `n4s_env` conda environment with Python 3.9 (skips if it already exists).
 4. Installs all Python packages from `requirements.txt` into `n4s_env`.
