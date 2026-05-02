@@ -46,6 +46,16 @@ fi
 # ------------------------------------------------------------------
 # 3. Conda environment
 # ------------------------------------------------------------------
+if ! command -v conda &>/dev/null; then
+    echo "conda not found in PATH. Attempting to load from default Miniconda location..."
+    source "$HOME/miniconda3/etc/profile.d/conda.sh" || { echo "Failed to load conda. Please activate it manually and re-run."; exit 1; }
+fi
+
+echo "Accepting Anaconda Terms of Service for default channels..."
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+echo "Anaconda Terms of Service accepted."
+
 if conda env list | grep -q "^${CONDA_ENV_NAME}"; then
     echo "Conda environment '${CONDA_ENV_NAME}' already exists. Skipping creation."
 else
