@@ -249,7 +249,7 @@ Close `vkconfig` and re-run `1_up_environment.sh`.
 <details>
 <summary><strong>CARLA selects the Intel GPU instead of NVIDIA (hybrid GPU systems)</strong></summary>
 
-On machines with both an Intel integrated GPU and an NVIDIA GPU, Vulkan may default to the Intel device and cause CARLA to crash with an error such as:
+On machines with both an Intel integrated GPU and an NVIDIA GPU, Vulkan may default to the Intel device and cause CARLA to crash. This might happen with Intel GPUs whose Vulkan support is incomplete or experimental. The error will look like:
 
 ```
 MESA-INTEL: warning: Haswell Vulkan support is incomplete
@@ -258,9 +258,9 @@ with error VK_ERROR_MEMORY_MAP_FAILED
 Segmentation fault (core dumped)
 ```
 
-`1_up_environment.sh` automatically detects the NVIDIA Vulkan ICD at `/usr/share/vulkan/icd.d/nvidia_icd.json` and forces its use by setting `VK_ICD_FILENAMES` before launching CARLA. No manual action is required if the NVIDIA driver is properly installed.
+`1_up_environment.sh` automatically searches for an NVIDIA Vulkan ICD file (`nvidia_icd*.json`) across the standard system locations (`/usr/share/vulkan/icd.d` and `/etc/vulkan/icd.d`) and forces its use by setting `VK_ICD_FILENAMES` before launching CARLA. No manual action is required if the NVIDIA driver is properly installed.
 
-If the issue persists, you can force the NVIDIA GPU manually:
+If the issue persists, you can force a specific ICD file manually. The path may vary depending on your system and driver version — it is typically under `/usr/share/vulkan/icd.d/` or `/etc/vulkan/icd.d/`, but the exact location may differ:
 
 ```bash
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json ./1_up_environment.sh
