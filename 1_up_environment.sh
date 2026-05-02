@@ -13,6 +13,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# On hybrid Intel/NVIDIA systems, Vulkan may default to the Intel GPU and cause
+# crashes. Force the NVIDIA ICD if available; otherwise fall back to the default.
+NVIDIA_ICD=$(find /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>/dev/null -name "nvidia_icd*.json" | head -1)
+if [[ -n "${NVIDIA_ICD}" ]]; then
+    echo "NVIDIA Vulkan ICD detected (${NVIDIA_ICD}). Forcing VK_ICD_FILENAMES to use NVIDIA GPU."
+    export VK_ICD_FILENAMES="${NVIDIA_ICD}"
+else
+    echo "No NVIDIA Vulkan ICD found. Using system default GPU."
+fi
+
 # Start CARLA simulator in the background
 echo "Starting CARLA simulator..."
 ./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality_level=Low -nosound 2>/dev/null &
