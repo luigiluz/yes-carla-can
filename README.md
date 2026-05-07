@@ -79,6 +79,12 @@ yes-carla-can/
 │   ├── can_bus_data_analyzer.py  #   Traffic analysis script
 │   └── candump_csv_parser.py     #   Parser for candump log files
 │
+├── tests/                        # Automated unit test suite (pytest)
+│   ├── conftest.py               #   Session fixtures (carla stub)
+│   ├── constants.py              #   Shared DBC content strings
+│   ├── test_dbc.py               #   Tests for DBC loading and validation rules
+│   └── test_network_encoding.py  #   Tests for CARLA↔CAN value encoding/decoding
+│
 ├── carla-0-9-15/                 # CARLA 0.9.15 simulator installation (downloaded by script)
 │
 └── images/                       # Images used in this README
@@ -97,6 +103,7 @@ This README is organized as follows:
 - [**Installation**](#installation): step-by-step process to download and install the platform.
 - [**Minimal Test**](#minimal-test): minimal execution test to verify a successful installation.
 - [**Experiments**](#experiments): step-by-step reproduction of the paper's demonstrations.
+- [**Unit Tests**](#unit-tests): automated test suite for validating DBC and encoding logic.
 - [**LICENSE**](#license): the project's open-source license.
 
 ---
@@ -588,6 +595,25 @@ The platform will print a startup summary showing which messages were loaded and
 ```
 [CAN] DBC loaded: data/my_custom.dbc
 [CAN] Periodic messages scheduled: BRAKE(100ms) GEAR(200ms) HAND_BRAKE(200ms) MANUAL_TRANSMISSION(500ms) REVERSE(200ms) STEER(100ms) THROTTLE(50ms)
+```
+
+---
+
+# Unit Tests
+
+The `tests/` directory contains a pytest suite that verifies the DBC validation rules and the CARLA↔CAN value encoding/decoding formulas. No CARLA server or CAN hardware is required — the SocketCAN bus is mocked and `carla` is replaced by a stub.
+
+Activate the conda environment and run:
+
+```bash
+conda activate n4s_env
+python -m pytest tests/ -v
+```
+
+Expected output:
+
+```
+25 passed in 0.13s
 ```
 
 ---
