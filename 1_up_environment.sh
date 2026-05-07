@@ -5,11 +5,38 @@ CONDA_ENV_NAME="${CONDA_ENV_NAME:-n4s_env}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DBC_PATH="${DBC_PATH:-data/carla.dbc}"
 
+usage() {
+    cat <<EOF
+Usage: $0 [-h|--help] [--dbc <path>]
+
+Start the "Yes, CARLA CAN" simulation environment.
+
+What this script does:
+  1. Launches the CARLA simulator in headless, low-quality mode
+  2. Creates the virtual CAN bus (vcan0) using the Linux kernel vcan module
+  3. Waits 5 seconds for CARLA to initialise
+  4. Starts the CARLA client module (spawns the vehicle and sensors)
+  5. Starts the vehicle controls module (translates vehicle state into CAN frames)
+
+Options:
+  -h, --help      Show this help message and exit
+  --dbc <path>    Path to the DBC file defining the virtual CAN network schema
+                  (default: data/carla.dbc)
+
+Environment variables:
+  CARLA_FOLDER_NAME     Directory where CARLA is installed (default: carla-0-9-15)
+  CONDA_ENV_NAME        Conda environment to use (default: n4s_env)
+  DBC_PATH              DBC file path, overridden by --dbc if provided
+  VK_ICD_FILENAMES      Force a specific Vulkan ICD file (skips auto-detection)
+EOF
+}
+
 # Allow overriding the DBC file via --dbc argument
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -h|--help) usage; exit 0 ;;
         --dbc) DBC_PATH="$2"; shift 2 ;;
-        *) echo "Unknown argument: $1"; exit 1 ;;
+        *) echo "Unknown argument: $1"; usage; exit 1 ;;
     esac
 done
 
