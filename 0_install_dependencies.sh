@@ -1,5 +1,33 @@
 #!/bin/bash
 
+usage() {
+    cat <<EOF
+Usage: $0 [-h|--help]
+
+Install all dependencies for the "Yes, CARLA CAN" platform.
+
+What this script does:
+  1. Installs system packages via apt-get (can-utils, curl, wget, libvulkan1, mesa-vulkan-drivers)
+  2. Checks for conda/Miniconda and offers to install it if absent
+  3. Creates the '${CONDA_ENV_NAME:-n4s_env}' conda environment with Python 3.9
+  4. Installs all Python packages from requirements.txt into the conda environment
+  5. Downloads and extracts CARLA 0.9.15 into the '${CARLA_FOLDER_NAME:-carla-0-9-15}/' folder
+
+Options:
+  -h, --help    Show this help message and exit
+
+Environment variables:
+  CARLA_FOLDER_NAME   Directory to install CARLA into (default: carla-0-9-15)
+EOF
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown argument: $arg"; usage; exit 1 ;;
+    esac
+done
+
 CARLA_FOLDER_NAME="${CARLA_FOLDER_NAME:-carla-0-9-15}"
 CONDA_ENV_NAME="n4s_env"
 PYTHON_VERSION="3.9"
