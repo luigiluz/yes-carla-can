@@ -1,10 +1,21 @@
-import pandas as pd
+import argparse
 import json
 
+import pandas as pd
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Analyze a parsed CAN bus CSV and compute per-ID statistics.")
+    parser.add_argument(
+        "--input",
+        default="candump-2026-04-17_225932_parsed.csv",
+        help="Path to the parsed candump CSV file (default: candump-2026-04-17_225932_parsed.csv)",
+    )
+    args = parser.parse_args()
+
     print("Analyzing CAN bus data")
 
-    filename = "candump-2026-04-17_225932_parsed.csv"
+    filename = args.input
     df = pd.read_csv(filename)
     print(df.head(5))
     print(df.info())
