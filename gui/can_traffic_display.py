@@ -5,6 +5,8 @@ from collections import deque
 import can
 import pygame
 
+from can_network.network import VCAN_CHANNEL
+
 
 class CANTrafficDisplay:
     """
@@ -16,13 +18,13 @@ class CANTrafficDisplay:
     PANEL_WIDTH = 480
     LINE_HEIGHT = 22
     PADDING = 8
-    HEADER = "CAN Traffic  (vcan0)"
+    HEADER = f"CAN Traffic  ({VCAN_CHANNEL})"
     COLOR_BG = (0, 0, 0)
     COLOR_HEADER = (0, 230, 100)
     COLOR_TEXT = (160, 255, 160)
     COLOR_DIVIDER = (0, 180, 80)
 
-    def __init__(self, channel: str = "vcan0", max_messages: int = 30):
+    def __init__(self, channel: str = VCAN_CHANNEL, max_messages: int = 30):
         self._messages: deque[str] = deque(maxlen=max_messages)
         self._lock = threading.Lock()
         self._active = False

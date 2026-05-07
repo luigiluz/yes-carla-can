@@ -6,6 +6,7 @@ import tkinter as tk
 import carla
 
 import can_network
+from can_network import VCAN_CHANNEL
 from can_network.dbc import MESSAGE_SENDERS
 
 try:
@@ -212,7 +213,7 @@ class KeyboardSenderControl(object):
         return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 
-def keyboard_parser_loop(dbc_path="data/carla.dbc"):
+def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
     print("Starting keyboard parser loop")
     pygame.init()
     pygame.font.init()
@@ -360,7 +361,7 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc"):
     # Flush the initial drawing to screen before any potentially-blocking CAN init
     pygame.display.flip()
 
-    can_net = can_network.CAN_Network(dbc_path=dbc_path)
+    can_net = can_network.CAN_Network(dbc_path=dbc_path, channel=vcan_channel)
     controller = KeyboardSenderControl(can_net)
     scheduled = [f"{name}({int(iv[0] * 1000)}ms)" for name, iv in sorted(controller._msg_timers.items())]
     print(f"[CAN] DBC loaded: {dbc_path}")
@@ -433,6 +434,11 @@ def main():
         default="data/carla.dbc",
         help="Path to the DBC file (default: data/carla.dbc)",
     )
+    parser.add_argument(
+        "--vcan",
+        default=VCAN_CHANNEL,
+        help=f"Virtual CAN interface name (default: {VCAN_CHANNEL})",
+    )
     args = parser.parse_args()
 
     # Ensure SIGTERM (e.g. from environment_down.sh) also exits cleanly
@@ -441,7 +447,7 @@ def main():
     print("Sending commands through CAN bus")
     print_key_bindings()
     try:
-        keyboard_parser_loop(dbc_path=args.dbc)
+        keyboard_parser_loop(dbc_path=args.dbc, vcan_channel=args.vcan)
     except (KeyboardInterrupt, SystemExit):
         print("\nCancelled by user. Bye!")
         pygame.quit()

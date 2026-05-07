@@ -3,6 +3,8 @@ import carla
 
 from can_network.dbc import load_and_validate, REQUIRED_SIGNALS
 
+VCAN_CHANNEL = "vcan0"
+
 
 class CAN_Network(object):
     """Interface to the virtual CAN bus backed by a DBC message schema."""
@@ -10,9 +12,9 @@ class CAN_Network(object):
     door_change_state = False
     current_lights = carla.VehicleLightState.NONE
 
-    def __init__(self, dbc_path="data/carla.dbc"):
+    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL):
         self.bus = can.ThreadSafeBus(
-            interface="socketcan", channel="vcan0", receive_own_messages=True
+            interface="socketcan", channel=channel, receive_own_messages=True
         )
         self.recvd_controls = carla.VehicleControl()
         self.db, self.cycle_times = load_and_validate(dbc_path)

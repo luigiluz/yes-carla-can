@@ -24,6 +24,8 @@ for arg in "$@"; do
     esac
 done
 
+VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
+
 # Stop vehicle controls module
 echo "Stopping vehicle controls module..."
 VEHICLE_CONTROLS_PID=$(pgrep -d ' ' -f "vehicle_controls_module.py")
@@ -69,8 +71,8 @@ fi
 
 # Bring virtual CAN bus down
 echo "Bringing virtual CAN bus down..."
-sudo ip link set down vcan0
-sudo ip link delete vcan0
+sudo ip link set down "${VCAN_INTERFACE}"
+sudo ip link delete "${VCAN_INTERFACE}"
 sudo modprobe -r vcan
 
 echo "Environment is down!"

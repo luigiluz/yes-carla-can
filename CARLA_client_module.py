@@ -34,7 +34,7 @@ import tkinter as tk
 import carla
 import pygame
 
-from can_network.network import CAN_Network
+from can_network.network import CAN_Network, VCAN_CHANNEL
 from gui import CANTrafficDisplay, HUD, KeyboardControl, World
 
 
@@ -50,8 +50,8 @@ def game_loop(args):
 
     world = None
     original_settings = None
-    can_bus = CAN_Network()
-    can_display = CANTrafficDisplay(channel="vcan0")
+    can_bus = CAN_Network(channel=args.vcan)
+    can_display = CANTrafficDisplay(channel=args.vcan)
 
     try:
         client = carla.Client(args.host, args.port)
@@ -195,6 +195,11 @@ def main():
     )
     argparser.add_argument(
         "--sync", action="store_true", help="Activate synchronous mode execution"
+    )
+    argparser.add_argument(
+        "--vcan",
+        default=VCAN_CHANNEL,
+        help=f"Virtual CAN interface name (default: {VCAN_CHANNEL})",
     )
     args = argparser.parse_args()
 
