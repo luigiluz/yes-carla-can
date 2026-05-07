@@ -116,6 +116,9 @@ The considered badges are: Available, Functional, Sustainable, and Reproducible.
 | **Machine** | Lenovo ThinkPad L14 |
 | **CPU** | 11th Gen Intel Core i5-1135G7 @ 2.40GHz (4 cores / 8 threads, up to 4.2 GHz) |
 | **RAM** | 16 GB |
+| **Storage** | ≥ 27 GB free (CARLA 0.9.15: ~27 GB; remaining platform files: ~22 MB) |
+
+> **Note:** The CARLA simulator dominates disk usage. Ensure at least 27 GB of free storage is available before running the install script.
 
 **Software**:
 
