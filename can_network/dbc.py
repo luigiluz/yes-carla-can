@@ -18,11 +18,31 @@ MESSAGES = {
     "GENERAL_LIGHTS":      ("GENERAL_LIGHTS_signal",      "send_current_lights_msg",     False),
 }
 
-# Derived constants — do not edit these; edit MESSAGES above instead.
+# Sensor messages — multi-signal, event-driven or periodic, never required for actuation.
+# Format: message_name -> (signal_names_tuple, send_method_name)
+SENSOR_MESSAGES = {
+    "GNSS":          (("GNSS_LAT_signal", "GNSS_LON_signal"),                            "send_gnss_msg"),
+    "COLLISION":     (("COLLISION_INTENSITY_signal",),                                    "send_collision_msg"),
+    "LANE_INVASION": (("LANE_INVASION_TYPE_signal",),                                     "send_lane_invasion_msg"),
+    "IMU_ACCEL":     (("IMU_ACCEL_X_signal", "IMU_ACCEL_Y_signal", "IMU_ACCEL_Z_signal"), "send_imu_accel_msg"),
+    "IMU_GYRO":      (("IMU_GYRO_X_signal",  "IMU_GYRO_Y_signal",  "IMU_GYRO_Z_signal"),  "send_imu_gyro_msg"),
+    "IMU_COMPASS":   (("IMU_COMPASS_signal",),                                            "send_imu_compass_msg"),
+    "RADAR_TARGET":  (("RADAR_VEL_signal", "RADAR_AZI_signal", "RADAR_ALT_signal", "RADAR_DEPTH_signal"), "send_radar_target_msg"),
+}
+
+# Derived constant: expected signal names per sensor message (used for DBC validation).
+SENSOR_SIGNAL_NAMES = {
+    name: frozenset(sigs) for name, (sigs, _) in SENSOR_MESSAGES.items()
+}
+
+# Derived constants — do not edit these; edit MESSAGES / SENSOR_MESSAGES above instead.
 REQUIRED_MESSAGES = frozenset(name for name, (_, _, required) in MESSAGES.items() if required)
-SUPPORTED_MESSAGES = frozenset(MESSAGES.keys())
-REQUIRED_SIGNALS   = {name: sig     for name, (sig, _, _)      in MESSAGES.items() if sig is not None}
-MESSAGE_SENDERS    = {name: method  for name, (_, method, _)   in MESSAGES.items() if method is not None}
+SUPPORTED_MESSAGES = frozenset(MESSAGES.keys()) | frozenset(SENSOR_MESSAGES.keys())
+REQUIRED_SIGNALS   = {name: sig    for name, (sig, _, _)    in MESSAGES.items() if sig is not None}
+MESSAGE_SENDERS    = (
+    {name: method for name, (_, method, _) in MESSAGES.items()       if method is not None}
+    | {name: method for name, (_, method)  in SENSOR_MESSAGES.items()}
+)
 
 
 def load_and_validate(dbc_path):
@@ -64,6 +84,19 @@ def load_and_validate(dbc_path):
             raise ValueError(
                 f"[CAN] Message '{msg_name}' signal mismatch: "
                 f"expected '{expected_signal}', found '{actual_signals[0]}'"
+            )
+
+    # Validate sensor messages: all declared signal names must exist in the DBC.
+    for msg_name, expected_signals in SENSOR_SIGNAL_NAMES.items():
+        if msg_name not in db_names:
+            continue  # sensor messages are optional
+        dbc_msg = db.get_message_by_name(msg_name)
+        actual_signals = frozenset(s.name for s in dbc_msg.signals)
+        missing = expected_signals - actual_signals
+        if missing:
+            raise ValueError(
+                f"[CAN] Sensor message '{msg_name}' is missing expected signals: "
+                f"{sorted(missing)}"
             )
 
     # Informational: DBC has messages the system doesn't handle.

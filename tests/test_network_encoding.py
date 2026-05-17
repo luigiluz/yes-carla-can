@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from can_network.network import CAN_Network
-from constants import FULL_DBC
+from constants import FULL_DBC, SENSOR_DBC
 
 
 # ---------------------------------------------------------------------------
@@ -17,6 +17,23 @@ def dbc_path(tmp_path_factory):
     p = tmp_path_factory.mktemp("dbc") / "carla.dbc"
     p.write_text(FULL_DBC)
     return p
+
+
+@pytest.fixture(scope="module")
+def sensor_dbc_path(tmp_path_factory):
+    """Temporary DBC file that also includes all 6 sensor messages."""
+    p = tmp_path_factory.mktemp("sensor_dbc") / "sensor.dbc"
+    p.write_text(SENSOR_DBC)
+    return p
+
+
+@pytest.fixture
+def sensor_net_and_bus(sensor_dbc_path):
+    """Return a (CAN_Network, mock_bus) pair backed by the sensor DBC."""
+    mock_bus = MagicMock()
+    with patch("can.ThreadSafeBus", return_value=mock_bus):
+        net = CAN_Network(dbc_path=str(sensor_dbc_path), channel="vcan0")
+    return net, mock_bus
 
 
 @pytest.fixture
@@ -147,3 +164,129 @@ def test_recv_steer_max_byte_decodes_to_full_right(net_and_bus):
     frame = net._build_msg("STEER", 255)
     result = _recv_one_frame(net, mock_bus, frame)
     assert result.steer == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# Sensor encoding — GNSS
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("lat, lon", [
+    (48.8566, 2.3522),    # Paris
+    (-33.8688, 151.2093), # Sydney (negative lat, large lon)
+    (0.0, 0.0),           # null island
+    (90.0, 180.0),        # extremes
+])
+def test_gnss_encoding_round_trip(sensor_net_and_bus, lat, lon):
+    """GNSS lat/lon survive a full encode→decode cycle within one scale unit (1e-6 deg)."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_gnss_msg(lat, lon)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["GNSS_LAT_signal"] == pytest.approx(lat, abs=1e-6)
+    assert decoded["GNSS_LON_signal"] == pytest.approx(lon, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Sensor encoding — Collision
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("intensity, expected", [
+    (0.0, 0.0),
+    (42.5, 42.5),
+    (6553.5, 6553.5),  # max representable value
+])
+def test_collision_encoding_round_trip(sensor_net_and_bus, intensity, expected):
+    """Collision intensity survives encode→decode within the 0.1 scale resolution."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_collision_msg(intensity)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["COLLISION_INTENSITY_signal"] == pytest.approx(expected, abs=0.1)
+
+
+def test_collision_intensity_clamped_at_uint16_max(sensor_net_and_bus):
+    """Intensities beyond the representable range are clamped to 6553.5."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_collision_msg(99999.0)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["COLLISION_INTENSITY_signal"] == pytest.approx(6553.5, abs=0.1)
+
+
+# ---------------------------------------------------------------------------
+# Sensor encoding — Lane invasion
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bitmask", [0b0000_0001, 0b0000_0110, 0b0111_1111_1111])
+def test_lane_invasion_bitmask_round_trip(sensor_net_and_bus, bitmask):
+    """Lane-invasion type bitmask survives encode→decode unchanged."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_lane_invasion_msg(bitmask)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert int(decoded["LANE_INVASION_TYPE_signal"]) == bitmask
+
+
+# ---------------------------------------------------------------------------
+# Sensor encoding — IMU
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("x, y, z", [
+    (9.81, 0.0, -9.81),
+    (0.0, 0.0, 0.0),
+    (99.9, -99.9, 50.0),
+])
+def test_imu_accel_encoding_round_trip(sensor_net_and_bus, x, y, z):
+    """IMU accelerometer values survive encode→decode within the 0.01 m/s² scale resolution."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_imu_accel_msg(x, y, z)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["IMU_ACCEL_X_signal"] == pytest.approx(x, abs=0.01)
+    assert decoded["IMU_ACCEL_Y_signal"] == pytest.approx(y, abs=0.01)
+    assert decoded["IMU_ACCEL_Z_signal"] == pytest.approx(z, abs=0.01)
+
+
+@pytest.mark.parametrize("x, y, z", [
+    (0.0, 0.0, 0.0),
+    (45.0, -90.0, 180.0),
+])
+def test_imu_gyro_encoding_round_trip(sensor_net_and_bus, x, y, z):
+    """IMU gyroscope values survive encode→decode within the 0.01 deg/s scale resolution."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_imu_gyro_msg(x, y, z)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["IMU_GYRO_X_signal"] == pytest.approx(x, abs=0.01)
+    assert decoded["IMU_GYRO_Y_signal"] == pytest.approx(y, abs=0.01)
+    assert decoded["IMU_GYRO_Z_signal"] == pytest.approx(z, abs=0.01)
+
+
+@pytest.mark.parametrize("compass", [0.0, 90.0, 180.0, 270.0, 359.99])
+def test_imu_compass_encoding_round_trip(sensor_net_and_bus, compass):
+    """IMU compass angle survives encode→decode within the 0.01 deg scale resolution."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_imu_compass_msg(compass)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["IMU_COMPASS_signal"] == pytest.approx(compass, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Sensor encoding — Radar
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("velocity, azimuth, altitude, depth", [
+    (0.0,   0.0,   0.0,  10.0),   # stationary object dead ahead
+    (7.5,   10.0,  5.0,  50.0),   # approaching, slightly right and high
+    (-7.5, -10.0, -5.0,  50.0),   # receding, slightly left and low
+    (0.0,   17.5,  10.0, 100.0),  # corner of FOV, max depth
+    (0.0,   0.0,   0.0,   0.01),  # very close target
+])
+def test_radar_target_encoding_round_trip(sensor_net_and_bus, velocity, azimuth, altitude, depth):
+    """Radar detection values survive encode→decode within the 0.01 resolution."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_radar_target_msg(velocity, azimuth, altitude, depth)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["RADAR_VEL_signal"]   == pytest.approx(velocity,  abs=0.01)
+    assert decoded["RADAR_AZI_signal"]   == pytest.approx(azimuth,   abs=0.01)
+    assert decoded["RADAR_ALT_signal"]   == pytest.approx(altitude,  abs=0.01)
+    assert decoded["RADAR_DEPTH_signal"] == pytest.approx(depth,     abs=0.01)

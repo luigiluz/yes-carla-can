@@ -89,7 +89,7 @@ def game_loop(args):
         pygame.display.flip()
 
         hud = HUD(width / 2, height / 2)
-        world = World(sim_world, hud, args)
+        world = World(sim_world, hud, args, can_bus)
         controller = KeyboardControl(world, args.autopilot)
 
         if args.sync:
