@@ -1,7 +1,7 @@
 """Unit tests for can_network/dbc.py — DBC loading and validation rules."""
 import pytest
-from can_network.dbc import load_and_validate, REQUIRED_MESSAGES
-from constants import MINIMAL_DBC
+from can_network.dbc import load_and_validate, REQUIRED_MESSAGES, SUPPORTED_MESSAGES, SENSOR_MESSAGES
+from constants import MINIMAL_DBC, SENSOR_DBC
 
 
 @pytest.fixture
@@ -108,4 +108,57 @@ def test_multiple_signals_raises_value_error(tmp_path):
     p = tmp_path / "multi_signal.dbc"
     p.write_text(broken)
     with pytest.raises(ValueError, match="THROTTLE"):
+        load_and_validate(p)
+
+
+# ---------------------------------------------------------------------------
+# Sensor message tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sensor_dbc(tmp_path):
+    """Temporary DBC file with all control messages and the 6 sensor messages."""
+    p = tmp_path / "sensor.dbc"
+    p.write_text(SENSOR_DBC)
+    return p
+
+
+def test_sensor_messages_in_supported_messages():
+    """All SENSOR_MESSAGES names must be part of SUPPORTED_MESSAGES."""
+    for name in SENSOR_MESSAGES:
+        assert name in SUPPORTED_MESSAGES, f"{name} missing from SUPPORTED_MESSAGES"
+
+
+def test_sensor_messages_load_without_error(sensor_dbc):
+    """A DBC with multi-signal sensor messages must load without raising ValueError."""
+    db, _ = load_and_validate(sensor_dbc)
+    assert db is not None
+
+
+def test_sensor_periodic_messages_in_cycle_times(sensor_dbc):
+    """GNSS and IMU messages have non-zero cycle times and must appear in cycle_times."""
+    _, cycle_times = load_and_validate(sensor_dbc)
+    assert cycle_times["GNSS"]        == pytest.approx(1.0)    # 1000 ms
+    assert cycle_times["IMU_ACCEL"]   == pytest.approx(0.1)    # 100 ms
+    assert cycle_times["IMU_GYRO"]    == pytest.approx(0.1)
+    assert cycle_times["IMU_COMPASS"] == pytest.approx(0.1)
+
+
+def test_sensor_event_messages_absent_from_cycle_times(sensor_dbc):
+    """COLLISION and LANE_INVASION have cycle_time=0 and must not appear in cycle_times."""
+    _, cycle_times = load_and_validate(sensor_dbc)
+    assert "COLLISION"     not in cycle_times
+    assert "LANE_INVASION" not in cycle_times
+
+
+def test_sensor_message_with_missing_signal_raises_value_error(tmp_path):
+    """Removing a declared signal from a sensor message raises ValueError."""
+    broken = SENSOR_DBC.replace(
+        ' SG_ GNSS_LON_signal : 32|32@1- (0.0000001,0) [-180|180] "deg" ECU\n',
+        '',
+    )
+    p = tmp_path / "missing_sensor_signal.dbc"
+    p.write_text(broken)
+    with pytest.raises(ValueError, match="GNSS"):
         load_and_validate(p)
