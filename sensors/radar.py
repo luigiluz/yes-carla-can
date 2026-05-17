@@ -4,9 +4,10 @@ import carla
 
 
 class RadarSensor(object):
-    def __init__(self, parent_actor):
+    def __init__(self, parent_actor, can_net):
         self.sensor = None
         self._parent = parent_actor
+        self._can_net = can_net
         bound_x = 0.5 + self._parent.bounding_box.extent.x
         bound_y = 0.5 + self._parent.bounding_box.extent.y
         bound_z = 0.5 + self._parent.bounding_box.extent.z
@@ -64,3 +65,9 @@ class RadarSensor(object):
                 life_time=0.06,
                 persistent_lines=False,
                 color=carla.Color(r, g, b))
+            self._can_net.send_radar_target_msg(
+                detect.velocity,
+                math.degrees(detect.azimuth),
+                math.degrees(detect.altitude),
+                detect.depth,
+            )

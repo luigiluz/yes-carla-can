@@ -140,6 +140,14 @@ class CAN_Network(object):
             "IMU_COMPASS_signal": compass,
         }))
 
+    def send_radar_target_msg(self, velocity, azimuth, altitude, depth):
+        self.bus.send(self._build_sensor_msg("RADAR_TARGET", {
+            "RADAR_VEL_signal":   velocity,
+            "RADAR_AZI_signal":   azimuth,
+            "RADAR_ALT_signal":   altitude,
+            "RADAR_DEPTH_signal": depth,
+        }))
+
     def send_msg(self, controls):
         """Convenience method — sends all messages at once (bypasses per-message timing)."""
         self.send_throttle_msg(controls)

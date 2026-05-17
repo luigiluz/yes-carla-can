@@ -96,6 +96,12 @@ BO_ 1554 IMU_GYRO: 6 ECU
 BO_ 1555 IMU_COMPASS: 2 ECU
  SG_ IMU_COMPASS_signal : 0|16@1+ (0.01,0) [0|655.35] "deg"  ECU
 
+BO_ 1556 RADAR_TARGET: 8 ECU
+ SG_ RADAR_VEL_signal : 0|16@1- (0.01,0) [-327.68|327.67] "m/s"  ECU
+ SG_ RADAR_AZI_signal : 16|16@1- (0.01,0) [-327.68|327.67] "deg"  ECU
+ SG_ RADAR_ALT_signal : 32|16@1- (0.01,0) [-327.68|327.67] "deg"  ECU
+ SG_ RADAR_DEPTH_signal : 48|16@1+ (0.01,0) [0|655.35] "m"  ECU
+
 BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
 
 BA_DEF_DEF_ "GenMsgCycleTime" 0;
@@ -116,4 +122,5 @@ BA_ "GenMsgCycleTime" BO_ 1552 0;
 BA_ "GenMsgCycleTime" BO_ 1553 100;
 BA_ "GenMsgCycleTime" BO_ 1554 100;
 BA_ "GenMsgCycleTime" BO_ 1555 100;
+BA_ "GenMsgCycleTime" BO_ 1556 0;
 

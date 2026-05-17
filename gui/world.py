@@ -142,7 +142,7 @@ class World(object):
 
     def toggle_radar(self):
         if self.radar_sensor is None:
-            self.radar_sensor = RadarSensor(self.player)
+            self.radar_sensor = RadarSensor(self.player, self.can_net)
         elif self.radar_sensor.sensor is not None:
             self.radar_sensor.sensor.destroy()
             self.radar_sensor = None

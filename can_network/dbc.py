@@ -43,6 +43,7 @@ SENSOR_MESSAGES = {
     "IMU_ACCEL":     (("IMU_ACCEL_X_signal", "IMU_ACCEL_Y_signal", "IMU_ACCEL_Z_signal"), "send_imu_accel_msg"),
     "IMU_GYRO":      (("IMU_GYRO_X_signal",  "IMU_GYRO_Y_signal",  "IMU_GYRO_Z_signal"),  "send_imu_gyro_msg"),
     "IMU_COMPASS":   (("IMU_COMPASS_signal",),                                            "send_imu_compass_msg"),
+    "RADAR_TARGET":  (("RADAR_VEL_signal", "RADAR_AZI_signal", "RADAR_ALT_signal", "RADAR_DEPTH_signal"), "send_radar_target_msg"),
 }
 
 # Derived constant: expected signal names per sensor message (used for DBC validation).

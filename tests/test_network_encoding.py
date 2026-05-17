@@ -340,3 +340,26 @@ def test_imu_compass_encoding_round_trip(sensor_net_and_bus, compass):
     net.send_imu_compass_msg(compass)
     decoded = _decode_last_sent(net, mock_bus)
     assert decoded["IMU_COMPASS_signal"] == pytest.approx(compass, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Sensor encoding — Radar
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("velocity, azimuth, altitude, depth", [
+    (0.0,   0.0,   0.0,  10.0),   # stationary object dead ahead
+    (7.5,   10.0,  5.0,  50.0),   # approaching, slightly right and high
+    (-7.5, -10.0, -5.0,  50.0),   # receding, slightly left and low
+    (0.0,   17.5,  10.0, 100.0),  # corner of FOV, max depth
+    (0.0,   0.0,   0.0,   0.01),  # very close target
+])
+def test_radar_target_encoding_round_trip(sensor_net_and_bus, velocity, azimuth, altitude, depth):
+    """Radar detection values survive encode→decode within the 0.01 resolution."""
+    net, mock_bus = sensor_net_and_bus
+    net.send_radar_target_msg(velocity, azimuth, altitude, depth)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["RADAR_VEL_signal"]   == pytest.approx(velocity,  abs=0.01)
+    assert decoded["RADAR_AZI_signal"]   == pytest.approx(azimuth,   abs=0.01)
+    assert decoded["RADAR_ALT_signal"]   == pytest.approx(altitude,  abs=0.01)
+    assert decoded["RADAR_DEPTH_signal"] == pytest.approx(depth,     abs=0.01)

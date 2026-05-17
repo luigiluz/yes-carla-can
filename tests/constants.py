@@ -92,5 +92,11 @@ SENSOR_DBC = FULL_DBC.replace(
     'BA_ "GenMsgCycleTime" BO_ 1552 0;\n'
     'BA_ "GenMsgCycleTime" BO_ 1553 100;\n'
     'BA_ "GenMsgCycleTime" BO_ 1554 100;\n'
-    'BA_ "GenMsgCycleTime" BO_ 1555 100;\n',
+    'BA_ "GenMsgCycleTime" BO_ 1555 100;\n'
+    '\nBO_ 1556 RADAR_TARGET: 8 ECU\n'
+    ' SG_ RADAR_VEL_signal : 0|16@1- (0.01,0) [-327.68|327.67] "m/s" ECU\n'
+    ' SG_ RADAR_AZI_signal : 16|16@1- (0.01,0) [-327.68|327.67] "deg" ECU\n'
+    ' SG_ RADAR_ALT_signal : 32|16@1- (0.01,0) [-327.68|327.67] "deg" ECU\n'
+    ' SG_ RADAR_DEPTH_signal : 48|16@1+ (0.01,0) [0|655.35] "m" ECU\n'
+    '\nBA_ "GenMsgCycleTime" BO_ 1556 0;\n',
 )

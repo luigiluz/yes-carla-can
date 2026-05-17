@@ -146,10 +146,11 @@ def test_sensor_periodic_messages_in_cycle_times(sensor_dbc):
 
 
 def test_sensor_event_messages_absent_from_cycle_times(sensor_dbc):
-    """COLLISION and LANE_INVASION have cycle_time=0 and must not appear in cycle_times."""
+    """COLLISION, LANE_INVASION and RADAR_TARGET have cycle_time=0 and must not appear in cycle_times."""
     _, cycle_times = load_and_validate(sensor_dbc)
     assert "COLLISION"     not in cycle_times
     assert "LANE_INVASION" not in cycle_times
+    assert "RADAR_TARGET"  not in cycle_times
 
 
 def test_sensor_message_with_missing_signal_raises_value_error(tmp_path):
