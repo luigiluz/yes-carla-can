@@ -96,6 +96,7 @@ yes-carla-can/
 
 This README is organized as follows:
 
+- [**Running with Docker**](#running-with-docker): one-command setup using Docker containers **(recommended)**.
 - [**Considered Badges**](#considered-badges): the evaluation badges being requested for this artifact submission.
 - [**Basic Information**](#basic-information): hardware and software environment used to develop and test the platform.
 - [**Dependencies**](#dependencies): software packages and tools required to run the platform.
@@ -105,6 +106,124 @@ This README is organized as follows:
 - [**Experiments**](#experiments): step-by-step reproduction of the paper's demonstrations.
 - [**Unit Tests**](#unit-tests): automated test suite for validating DBC and encoding logic.
 - [**LICENSE**](#license): the project's open-source license.
+
+---
+
+# Running with Docker
+
+The entire platform can be launched with a single command using Docker. This eliminates manual dependency installation, conda environments, and CARLA downloads — everything runs in containers.
+
+## Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| **Docker** | [Install Docker Engine](https://docs.docker.com/engine/install/) |
+| **Docker Compose** | Included with Docker Engine 20.10+; verify with `docker compose version` |
+| **Linux with X11** | Required for the Pygame GUI windows (Wayland users need XWayland) |
+| **NVIDIA Container Toolkit** *(optional)* | Only needed for NVIDIA GPUs — [install guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) |
+
+> **Note:** The Docker setup loads the `vcan` kernel module on the host. This requires the container to run with `privileged` mode. The virtual CAN interface (`vcan0`) is entirely software-defined and poses no risk to physical hardware.
+
+## Quick start
+
+First, allow Docker containers to access your X11 display:
+
+```bash
+xhost +local:docker
+```
+
+Then start the platform:
+
+**Intel integrated GPU (default):**
+
+```bash
+docker compose up
+```
+
+**NVIDIA GPU:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up
+```
+
+This will:
+1. Create the virtual CAN bus (`vcan0`) on the host kernel
+2. Launch the CARLA 0.9.15 simulator server in headless mode
+3. Start the CARLA client module (spawns the vehicle and sensors)
+4. Start the vehicle controls module (keyboard → CAN frames)
+
+After a few seconds, the Pygame windows for the CARLA client and vehicle controls will appear.
+
+## Running experiments
+
+With the platform running, open a separate terminal to run experiments.
+
+### Cyberattacks (via Docker Compose profile)
+
+The cyberattacks module is available as an optional service. Configure the attack type and period via environment variables:
+
+```bash
+# Hand brake spoofing attack
+ATTACK_FEATURE=hand_brake ATTACK_PERIOD=0.001 docker compose --profile attack run cyberattack
+
+# Fuzzy attack
+ATTACK_FEATURE=fuzzy docker compose --profile attack run cyberattack
+
+# Denial-of-Service
+ATTACK_FEATURE=denial_of_service ATTACK_PERIOD=0.001 docker compose --profile attack run cyberattack
+```
+
+Alternatively, you can exec into the running platform container:
+
+```bash
+docker compose exec platform python cyberattacks_module.py --feature hand_brake --period 0.001
+```
+
+### Intrusion Detection System (via Docker Compose profile)
+
+```bash
+docker compose --profile ids run ids
+```
+
+Or via exec:
+
+```bash
+docker compose exec platform python intrusion_detection_module.py --detector id_time
+```
+
+### Monitoring CAN traffic
+
+```bash
+docker compose exec platform candump vcan0
+```
+
+## Custom DBC file
+
+To use a custom DBC file, set the `DBC_PATH` environment variable:
+
+```bash
+DBC_PATH=data/my_custom.dbc docker compose up
+```
+
+## Teardown
+
+Stop all containers and remove the virtual CAN interface:
+
+```bash
+docker compose down
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DBC_PATH` | `data/carla.dbc` | Path to the DBC file (relative to the project root) |
+| `VCAN_INTERFACE` | `vcan0` | Name of the virtual CAN interface |
+| `CARLA_HOST` | `127.0.0.1` | CARLA server hostname |
+| `CARLA_PORT` | `2000` | CARLA server TCP port |
+| `ATTACK_FEATURE` | `hand_brake` | Attack type for the cyberattack service |
+| `ATTACK_PERIOD` | `0.001` | Period (seconds) between attack messages |
+| `IDS_DETECTOR` | `id_time` | IDS algorithm for the ids service |
 
 ---
 

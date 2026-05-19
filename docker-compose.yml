@@ -1,0 +1,171 @@
+# ============================================================================
+# Yes, CARLA CAN — Docker Compose
+# ============================================================================
+#
+# Requires: NVIDIA GPU + NVIDIA Container Toolkit
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#
+# Quick start:
+#   xhost +local:docker && docker compose up
+#
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # 1. Init container: creates the vcan0 interface on the host kernel
+  # --------------------------------------------------------------------------
+  vcan-setup:
+    image: alpine:3.20
+    network_mode: host
+    privileged: true
+    volumes:
+      - /lib/modules:/lib/modules:ro
+    command: >
+      sh -c "
+        echo '[vcan-setup] Loading vcan kernel module...' &&
+        modprobe vcan &&
+        ip link add dev $${VCAN_INTERFACE:-vcan0} type vcan 2>/dev/null || true &&
+        ip link set up $${VCAN_INTERFACE:-vcan0} &&
+        echo '[vcan-setup] $${VCAN_INTERFACE:-vcan0} is UP.' &&
+        echo '[vcan-setup] Keeping container alive...' &&
+        tail -f /dev/null
+      "
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ip link show ${VCAN_INTERFACE:-vcan0} 2>/dev/null | grep -q UP"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+  # --------------------------------------------------------------------------
+  # 2. CARLA simulator server (official image, headless mode)
+  # --------------------------------------------------------------------------
+  carla-server:
+    image: carlasim/carla:0.9.15
+    runtime: nvidia
+    network_mode: host
+    privileged: true
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    command: bash CarlaUE4.sh -RenderOffScreen -nosound -ResX=300 -ResY=300 -quality-level=Low
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, display, utility]
+    depends_on:
+      vcan-setup:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.settimeout(1); s.connect(('localhost', 2000)); s.close()\" 2>/dev/null || nc -z -w2 localhost 2000 2>/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  # --------------------------------------------------------------------------
+  # 3. Platform modules: CARLA client + vehicle controls
+  # --------------------------------------------------------------------------
+  platform:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    runtime: nvidia
+    network_mode: host
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - DISPLAY=${DISPLAY}
+      - SDL_VIDEODRIVER=x11
+      - DBC_PATH=${DBC_PATH:-data/carla.dbc}
+      - VCAN_INTERFACE=${VCAN_INTERFACE:-vcan0}
+      - CARLA_HOST=${CARLA_HOST:-127.0.0.1}
+      - CARLA_PORT=${CARLA_PORT:-2000}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    devices:
+      - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, display, utility]
+    depends_on:
+      carla-server:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # 4. [OPTIONAL] Cyberattacks module
+  #    Start with: docker compose --profile attack run cyberattack
+  #    Configure via environment variables:
+  #      ATTACK_FEATURE=hand_brake ATTACK_PERIOD=0.001 docker compose --profile attack run cyberattack
+  # --------------------------------------------------------------------------
+  cyberattack:
+    profiles: ["attack"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VCAN_INTERFACE=${VCAN_INTERFACE:-vcan0}
+      - ATTACK_FEATURE=${ATTACK_FEATURE:-hand_brake}
+      - ATTACK_PERIOD=${ATTACK_PERIOD:-0.001}
+    entrypoint: >
+      python cyberattacks_module.py
+        --feature ${ATTACK_FEATURE:-hand_brake}
+        --period ${ATTACK_PERIOD:-0.001}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, display, utility]
+    depends_on:
+      carla-server:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # 5. [OPTIONAL] Intrusion Detection System
+  #    Start with: docker compose --profile ids run ids
+  #    Configure via environment variables:
+  #      IDS_DETECTOR=id_time docker compose --profile ids run ids
+  # --------------------------------------------------------------------------
+  ids:
+    profiles: ["ids"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VCAN_INTERFACE=${VCAN_INTERFACE:-vcan0}
+      - IDS_DETECTOR=${IDS_DETECTOR:-id_time}
+    entrypoint: >
+      python intrusion_detection_module.py
+        --detector ${IDS_DETECTOR:-id_time}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, display, utility]
+    depends_on:
+      carla-server:
+        condition: service_healthy
