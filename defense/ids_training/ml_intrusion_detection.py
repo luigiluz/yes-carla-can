@@ -40,14 +40,14 @@ class MlIntrusionDetection:
         DIM    = "\033[2m"
         SEP    = DIM + "─" * 44 + RESET
 
-        lines = [SEP]
-        if alert:
-            lines.append(f"{RED}[ALERT] ML anomaly detected{RESET}")
-        lines.append(f"Regular messages : {CYAN}{self.regular_counter}{RESET}")
-        lines.append(
-            f"Total intrusions : {(RED if self.intrusion_counter else CYAN)}{self.intrusion_counter}{RESET}"
-        )
-        lines.append(SEP)
+        alert_tag = f"  {RED}[ALERT]{RESET}" if alert else ""
+
+        lines = [
+            SEP,
+            f"Regular messages : {CYAN}{self.regular_counter}{RESET}",
+            f"Total intrusions : {(RED if self.intrusion_counter else CYAN)}{self.intrusion_counter}{RESET}{alert_tag}",
+            SEP,
+        ]
 
         if self._last_line_count > 0:
             sys.stdout.write(f"\033[{self._last_line_count}A")
