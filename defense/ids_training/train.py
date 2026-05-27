@@ -11,12 +11,20 @@ FEATURE_COLS = ["can_id"] + [f"payload_byte_{i}" for i in range(8)]
 OUTPUT_DIR = Path(__file__).parent / "models"
 
 
+def _parse_hex(x) -> int:
+    """Parse a hex value that may be a string, int, or float (pandas dtype inference)."""
+    if pd.isna(x):
+        return 0
+    # pandas reads "00" as 0.0 when the column has NaN rows; strip decimal suffix
+    return int(str(x).split(".")[0], 16)
+
+
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     """Convert hex string columns to integers suitable for model input."""
     X = pd.DataFrame()
-    X["can_id"] = df["can_id"].apply(lambda x: int(str(x), 16))
+    X["can_id"] = df["can_id"].apply(_parse_hex)
     for col in [f"payload_byte_{i}" for i in range(8)]:
-        X[col] = df[col].apply(lambda x: int(str(x), 16) if pd.notna(x) else 0)
+        X[col] = df[col].apply(_parse_hex)
     return X
 
 
@@ -62,8 +70,10 @@ def main():
     print(f"Training Isolation Forest on {len(X)} samples with features: {list(X.columns)}")
 
     # ── Train ─────────────────────────────────────────────────────────────────
+    # Fit on numpy array (not DataFrame) so the model stores no feature names.
+    # This avoids a UserWarning on every predict() call at inference time.
     model = IsolationForest(random_state=42)
-    model.fit(X)
+    model.fit(X.values)
 
     # ── Save ──────────────────────────────────────────────────────────────────
     args.output_dir.mkdir(parents=True, exist_ok=True)
