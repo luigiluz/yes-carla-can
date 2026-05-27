@@ -15,7 +15,23 @@ MESSAGES = {
     "GEAR":                ("GEAR_signal",                "send_gear_msg",                True),
     "AUTOPILOT":           (None,                         "send_autopilot_msg",           False),
     "DOORS":               ("DOORS_signal",               "send_switch_door_state_msg",  False),
-    "GENERAL_LIGHTS":      ("GENERAL_LIGHTS_signal",      "send_current_lights_msg",     False),
+    "GENERAL_LIGHTS":      (None,                         "send_current_lights_msg",     False),
+}
+
+# Ordered mapping of DBC signal name → carla.VehicleLightState integer flag value.
+# These 11 signals are packed into the GENERAL_LIGHTS message frame (2 bytes, bits 0–10).
+LIGHT_SIGNALS = {
+    "LIGHTS_Position_signal":     0x001,
+    "LIGHTS_LowBeam_signal":      0x002,
+    "LIGHTS_HighBeam_signal":     0x004,
+    "LIGHTS_Brake_signal":        0x008,
+    "LIGHTS_RightBlinker_signal": 0x010,
+    "LIGHTS_LeftBlinker_signal":  0x020,
+    "LIGHTS_Reverse_signal":      0x040,
+    "LIGHTS_Fog_signal":          0x080,
+    "LIGHTS_Interior_signal":     0x100,
+    "LIGHTS_Special1_signal":     0x200,
+    "LIGHTS_Special2_signal":     0x400,
 }
 
 # Derived constants — do not edit these; edit MESSAGES above instead.
@@ -64,6 +80,17 @@ def load_and_validate(dbc_path):
             raise ValueError(
                 f"[CAN] Message '{msg_name}' signal mismatch: "
                 f"expected '{expected_signal}', found '{actual_signals[0]}'"
+            )
+
+    # Validate that all expected light signals are present when GENERAL_LIGHTS is in the DBC.
+    if "GENERAL_LIGHTS" in db_names:
+        lights_msg = db.get_message_by_name("GENERAL_LIGHTS")
+        actual_light_signals = {s.name for s in lights_msg.signals}
+        missing_light_signals = set(LIGHT_SIGNALS.keys()) - actual_light_signals
+        if missing_light_signals:
+            raise ValueError(
+                f"[CAN] GENERAL_LIGHTS message is missing expected light signals: "
+                f"{sorted(missing_light_signals)}"
             )
 
     # Informational: DBC has messages the system doesn't handle.

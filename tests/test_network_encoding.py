@@ -101,15 +101,88 @@ def test_brake_encoding(net_and_bus, brake, expected_byte):
 
 
 # ---------------------------------------------------------------------------
-# Lights mask  (CARLA VehicleLightState can exceed one byte; must be masked)
+# Lights encoding — individual flags map to individual 1-bit signals
 # ---------------------------------------------------------------------------
 
 
-def test_lights_value_exceeding_byte_is_masked(net_and_bus):
-    """VehicleLightState values > 0xFF are truncated to one byte before encoding."""
+def test_lights_only_position_sets_position_signal(net_and_bus):
+    """Sending only Position (0x001) sets LIGHTS_Position_signal=1, all others 0."""
     net, mock_bus = net_and_bus
-    net.send_current_lights_msg(0x1FF)
-    assert _decode_last_sent(net, mock_bus)["GENERAL_LIGHTS_signal"] == 0xFF
+    net.send_current_lights_msg(0x001)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["LIGHTS_Position_signal"] == 1
+    assert decoded["LIGHTS_LowBeam_signal"] == 0
+    assert decoded["LIGHTS_Brake_signal"] == 0
+
+
+def test_lights_brake_and_reverse_set_correct_signals(net_and_bus):
+    """Sending Brake|Reverse (0x008 | 0x040) sets only those two signals."""
+    net, mock_bus = net_and_bus
+    net.send_current_lights_msg(0x008 | 0x040)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["LIGHTS_Brake_signal"] == 1
+    assert decoded["LIGHTS_Reverse_signal"] == 1
+    assert decoded["LIGHTS_Position_signal"] == 0
+    assert decoded["LIGHTS_LowBeam_signal"] == 0
+
+
+def test_lights_interior_special1_special2_are_not_dropped(net_and_bus):
+    """Interior (0x100), Special1 (0x200), Special2 (0x400) are fully encoded — not silently dropped."""
+    net, mock_bus = net_and_bus
+    net.send_current_lights_msg(0x100 | 0x200 | 0x400)
+    decoded = _decode_last_sent(net, mock_bus)
+    assert decoded["LIGHTS_Interior_signal"] == 1
+    assert decoded["LIGHTS_Special1_signal"] == 1
+    assert decoded["LIGHTS_Special2_signal"] == 1
+    assert decoded["LIGHTS_Position_signal"] == 0
+
+
+def test_lights_all_sets_all_signals(net_and_bus):
+    """VehicleLightState.All (0x7FF) sets all 11 light signals to 1."""
+    net, mock_bus = net_and_bus
+    net.send_current_lights_msg(0x7FF)
+    decoded = _decode_last_sent(net, mock_bus)
+    for sig in [
+        "LIGHTS_Position_signal", "LIGHTS_LowBeam_signal", "LIGHTS_HighBeam_signal",
+        "LIGHTS_Brake_signal", "LIGHTS_RightBlinker_signal", "LIGHTS_LeftBlinker_signal",
+        "LIGHTS_Reverse_signal", "LIGHTS_Fog_signal", "LIGHTS_Interior_signal",
+        "LIGHTS_Special1_signal", "LIGHTS_Special2_signal",
+    ]:
+        assert decoded[sig] == 1, f"Expected {sig} == 1"
+
+
+def test_lights_none_clears_all_signals(net_and_bus):
+    """VehicleLightState.NONE (0) sets all 11 light signals to 0."""
+    net, mock_bus = net_and_bus
+    net.send_current_lights_msg(0)
+    decoded = _decode_last_sent(net, mock_bus)
+    for sig in [
+        "LIGHTS_Position_signal", "LIGHTS_LowBeam_signal", "LIGHTS_HighBeam_signal",
+        "LIGHTS_Brake_signal", "LIGHTS_RightBlinker_signal", "LIGHTS_LeftBlinker_signal",
+        "LIGHTS_Reverse_signal", "LIGHTS_Fog_signal", "LIGHTS_Interior_signal",
+        "LIGHTS_Special1_signal", "LIGHTS_Special2_signal",
+    ]:
+        assert decoded[sig] == 0, f"Expected {sig} == 0"
+
+
+def test_lights_roundtrip_all(net_and_bus):
+    """Encode VehicleLightState.All then decode via recv_msg returns the same value (0x7FF)."""
+    net, mock_bus = net_and_bus
+    net.send_current_lights_msg(0x7FF)
+    frame = mock_bus.send.call_args[0][0]
+    mock_bus.recv.side_effect = [frame, None]
+    net.recv_msg()
+    assert net.current_lights == 0x7FF
+
+
+def test_lights_roundtrip_partial(net_and_bus):
+    """Encode LowBeam|Fog (0x082) then decode via recv_msg returns 0x082."""
+    net, mock_bus = net_and_bus
+    net.send_current_lights_msg(0x002 | 0x080)
+    frame = mock_bus.send.call_args[0][0]
+    mock_bus.recv.side_effect = [frame, None]
+    net.recv_msg()
+    assert net.current_lights == 0x002 | 0x080
 
 
 # ---------------------------------------------------------------------------

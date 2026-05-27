@@ -1,7 +1,7 @@
 import can
 import carla
 
-from can_network.dbc import load_and_validate, REQUIRED_SIGNALS
+from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS
 
 VCAN_CHANNEL = "vcan0"
 VCAN_ATTACKER_CHANNEL = "vcan1"
@@ -50,9 +50,14 @@ class CAN_Network(object):
         self.bus.send(self._build_msg("DOORS", True))
 
     def send_current_lights_msg(self, lights):
-        # VehicleLightState values above 0xFF are carla-only and not in the DBC;
-        # mask them out before encoding.
-        self.bus.send(self._build_msg("GENERAL_LIGHTS", int(lights) & 0xFF))
+        dbc_msg = self.db.get_message_by_name("GENERAL_LIGHTS")
+        lights_int = int(lights)
+        signal_dict = {sig: int(bool(lights_int & flag)) for sig, flag in LIGHT_SIGNALS.items()}
+        self.bus.send(can.Message(
+            arbitration_id=dbc_msg.frame_id,
+            data=dbc_msg.encode(signal_dict),
+            is_extended_id=dbc_msg.is_extended_frame,
+        ))
 
     def send_throttle_msg(self, controls):
         self.bus.send(self._build_msg("THROTTLE", int(controls.throttle * 255)))
@@ -143,9 +148,11 @@ class CAN_Network(object):
                     self.door_change_state = True
 
             elif name == "GENERAL_LIGHTS":
-                self.current_lights = carla.VehicleLightState(
-                    int(data[REQUIRED_SIGNALS["GENERAL_LIGHTS"]])
-                )
+                lights_int = 0
+                for sig, flag in LIGHT_SIGNALS.items():
+                    if data.get(sig, 0):
+                        lights_int |= flag
+                self.current_lights = carla.VehicleLightState(lights_int)
 
             try:
                 recv_msg = self.bus.recv(timeout=0)

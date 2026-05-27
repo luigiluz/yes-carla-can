@@ -46,12 +46,22 @@ BA_ "GenMsgCycleTime" BO_ 1543 200;
 
 """
 
-# All 7 required messages plus the optional GENERAL_LIGHTS message.
-# Used in test_network_encoding.py which tests the lights-mask logic.
+# All 7 required messages plus the optional GENERAL_LIGHTS message (11 × 1-bit signals).
+# Used in test_network_encoding.py which tests the lights encoding logic.
 FULL_DBC = MINIMAL_DBC.replace(
     'BA_ "GenMsgCycleTime" BO_ 1543 200;\n',
     'BA_ "GenMsgCycleTime" BO_ 1543 200;\n'
-    '\nBO_ 1549 GENERAL_LIGHTS: 4 ECU\n'
-    ' SG_ GENERAL_LIGHTS_signal : 0|8@1+ (1,0) [0|255] "" ECU\n'
+    '\nBO_ 1549 GENERAL_LIGHTS: 2 ECU\n'
+    ' SG_ LIGHTS_Position_signal     : 0|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_LowBeam_signal      : 1|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_HighBeam_signal     : 2|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_Brake_signal        : 3|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_RightBlinker_signal : 4|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_LeftBlinker_signal  : 5|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_Reverse_signal      : 6|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_Fog_signal          : 7|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_Interior_signal     : 8|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_Special1_signal     : 9|1@1+  (1,0) [0|1] "" ECU\n'
+    ' SG_ LIGHTS_Special2_signal     : 10|1@1+ (1,0) [0|1] "" ECU\n'
     '\nBA_ "GenMsgCycleTime" BO_ 1549 0;\n',
 )

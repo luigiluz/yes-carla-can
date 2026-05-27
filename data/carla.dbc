@@ -60,8 +60,18 @@ BO_ 1543 GEAR: 4 ECU
 BO_ 1548 DOORS: 1 ECU
  SG_ DOORS_signal : 0|8@1+ (1,0) [0|255] ""  ECU
 
-BO_ 1549 GENERAL_LIGHTS: 4 ECU
- SG_ GENERAL_LIGHTS_signal : 0|8@1+ (1,0) [0|255] ""  ECU
+BO_ 1549 GENERAL_LIGHTS: 2 ECU
+ SG_ LIGHTS_Position_signal     : 0|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_LowBeam_signal      : 1|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_HighBeam_signal     : 2|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_Brake_signal        : 3|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_RightBlinker_signal : 4|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_LeftBlinker_signal  : 5|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_Reverse_signal      : 6|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_Fog_signal          : 7|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_Interior_signal     : 8|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_Special1_signal     : 9|1@1+  (1,0) [0|1] ""  ECU
+ SG_ LIGHTS_Special2_signal     : 10|1@1+ (1,0) [0|1] ""  ECU
 
 BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
 
