@@ -2,6 +2,9 @@ import argparse
 import pandas as pd
 
 
+PAYLOAD_BYTES = 8
+
+
 def main():
     parser = argparse.ArgumentParser(description="Parse a candump log file into a CSV.")
     parser.add_argument(
@@ -25,9 +28,23 @@ def main():
             timestamp = parts[0].replace("(", "").replace(")", "")
             bus = parts[1]
             data_bytes = ' '.join(parts[2:])
-            can_id = data_bytes.split("#")[0]
-            payload = data_bytes.split("#")[1]
-            data.append({'timestamp': timestamp, 'bus': bus, 'can_id': can_id, 'payload': payload})
+            if "#" not in data_bytes:
+                continue
+
+            can_id, payload_hex = data_bytes.split("#", 1)
+
+            row = {
+                'timestamp': timestamp,
+                'bus': bus,
+                'can_id': can_id,
+            }
+
+            for i in range(PAYLOAD_BYTES):
+                start = i * 2
+                end = start + 2
+                row[f'payload_byte_{i}'] = payload_hex[start:end] if len(payload_hex) >= end else None
+
+            data.append(row)
 
     # Export to a DataFrame
     df = pd.DataFrame(data)
