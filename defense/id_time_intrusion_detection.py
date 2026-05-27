@@ -59,7 +59,7 @@ class IdTimeIntrusionDetection():
 
     def run(self, message):
         """Evaluate a single CAN message and update intrusion/regular counters."""
-        id = str(hex(message.arbitration_id))
+        id = format(message.arbitration_id, 'X')
         timestamp = message.timestamp
 
         if id not in self.known_ids:
