@@ -1,0 +1,60 @@
+import json
+import sys
+
+import joblib
+import numpy as np
+
+
+class MlIntrusionDetection:
+    """Isolation Forest IDS that flags CAN messages deviating from a trained normal-traffic baseline."""
+
+    def __init__(self):
+        self.model = None
+        self.intrusion_counter = 0
+        self.regular_counter = 0
+        self._last_line_count = 0
+
+    def load(self, path):
+        """Load a trained Isolation Forest model from a PKL file."""
+        self.model = joblib.load(path)
+        print(f"[ML-IDS] Model loaded from: {path}")
+
+    def run(self, msg):
+        """Evaluate a single CAN message. Predicts -1 (anomaly) or 1 (normal)."""
+        data = list(msg.data) + [0] * 8
+        feature_vector = np.array([[msg.arbitration_id] + data[:8]])
+
+        prediction = self.model.predict(feature_vector)[0]
+
+        if prediction == -1:
+            self.intrusion_counter += 1
+            self._print_results(alert=True)
+        else:
+            self.regular_counter += 1
+            self._print_results(alert=False)
+
+    def _print_results(self, alert: bool):
+        RESET  = "\033[0m"
+        RED    = "\033[91m"
+        CYAN   = "\033[96m"
+        DIM    = "\033[2m"
+        SEP    = DIM + "─" * 44 + RESET
+
+        lines = [SEP]
+        if alert:
+            lines.append(f"{RED}[ALERT] ML anomaly detected{RESET}")
+        lines.append(f"Regular messages : {CYAN}{self.regular_counter}{RESET}")
+        lines.append(
+            f"Total intrusions : {(RED if self.intrusion_counter else CYAN)}{self.intrusion_counter}{RESET}"
+        )
+        lines.append(SEP)
+
+        if self._last_line_count > 0:
+            sys.stdout.write(f"\033[{self._last_line_count}A")
+            for _ in range(self._last_line_count):
+                sys.stdout.write("\033[2K\n")
+            sys.stdout.write(f"\033[{self._last_line_count}A")
+
+        sys.stdout.write("\n".join(lines) + "\n")
+        sys.stdout.flush()
+        self._last_line_count = len(lines)
