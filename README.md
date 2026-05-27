@@ -531,6 +531,24 @@ cat candump-2026-03-28_133445.log
 
 Such logs can be used for traffic analysis and as training data for machine learning-based intrusion detection systems. As future work, we plan to generate automatically labeled captures to further support machine learning experiments.
 
+### Helper script for timed captures
+
+This repository also includes a small helper script that wraps `candump` and stops automatically after a fixed duration:
+
+```bash
+./collect_traffic_logs.py --duration 10 --filename session.log
+```
+
+By default, logs are captured from `vcan0` and saved under `traffic_logs/` (the folder is created automatically if it does not exist).
+
+If `--filename` is omitted, `candump` auto-generates a file name (for example, `candump-YYYY-MM-DD_HHMMSS.log`) inside `traffic_logs/`.
+
+You can choose a different CAN interface with `--interface`:
+
+```bash
+./collect_traffic_logs.py --duration 15 --filename can0_run.log --interface can0
+```
+
 # Advanced usage - Customizing network messages and periods
 
 The virtual CAN network is configured via a DBC file. You can change CAN IDs and transmission periods without touching any code, which is useful, for example, when evaluating how well a detection algorithm generalises to a different network configuration.
