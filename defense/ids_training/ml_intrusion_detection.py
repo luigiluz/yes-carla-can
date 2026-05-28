@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 
 import joblib
 import numpy as np
@@ -13,6 +14,7 @@ class MlIntrusionDetection:
         self.intrusion_counter = 0
         self.regular_counter = 0
         self._last_line_count = 0
+        self._last_print_time = 0.0
 
     def load(self, path):
         """Load a trained Isolation Forest model from a PKL file."""
@@ -34,6 +36,11 @@ class MlIntrusionDetection:
             self._print_results(alert=False)
 
     def _print_results(self, alert: bool):
+        now = time.monotonic()
+        if not alert and (now - self._last_print_time) < 0.1:
+            return
+        self._last_print_time = now
+
         RESET  = "\033[0m"
         RED    = "\033[91m"
         CYAN   = "\033[96m"
