@@ -1,5 +1,7 @@
 import json
 import sys
+import time
+from time import monotonic as time_monotonic
 
 from collections import deque
 import math
@@ -46,6 +48,7 @@ class IdTimeIntrusionDetection():
         self.regular_counter = 0
         self._last_line_count = 0
         self._last_alert = ""
+        self._last_print_time = 0.0
 
     def load(self, path=None):
         """Load baseline CAN ID timing statistics from a JSON file."""
@@ -84,8 +87,6 @@ class IdTimeIntrusionDetection():
                 # Take the mean value of the queue
                 #actual_diff = self.running_statistics[id]['last_timestamps'].mean() - self.can_ids_statistics[id]["mean_timestamp_diff"]
 
-                self.running_statistics[id]['last_timestamps'].add(timestamp)
-
                 if actual_std > expected_std:
                     if id not in self.intrusion_counter:
                         self.intrusion_counter[id] = 1
@@ -109,6 +110,12 @@ class IdTimeIntrusionDetection():
             self._last_alert = f"{RED}[ALERT] Unknown CAN ID detected{RESET}"
         elif time:
             self._last_alert = f"{RED}[ALERT] Timing anomaly detected{RESET}"
+
+        is_alert = id or time
+        now = time_monotonic()
+        if not is_alert and (now - self._last_print_time) < 0.1:
+            return
+        self._last_print_time = now
 
         lines = [SEP]
         if self._last_alert:
