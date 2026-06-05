@@ -8,8 +8,8 @@ FEATURE_CAN_ID_PAYLOAD_MAPPER = {
         "payload": [0x01]
     },
     "reverse": {
-        "id": 0x607,
-        "payload": [0xFF, 0xFF, 0xFF, 0xFF]
+        "id": 0x603,
+        "payload": [0x01]
     },
     "high_beam": {
         "id": 0x60D,
