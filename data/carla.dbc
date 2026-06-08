@@ -73,6 +73,35 @@ BO_ 1549 GENERAL_LIGHTS: 2 ECU
  SG_ LIGHTS_Special1_signal     : 9|1@1+  (1,0) [0|1] ""  ECU
  SG_ LIGHTS_Special2_signal     : 10|1@1+ (1,0) [0|1] ""  ECU
 
+BO_ 1550 GNSS: 8 ECU
+ SG_ GNSS_LAT_signal : 0|32@1- (0.0000001,0) [-90|90] "deg"  ECU
+ SG_ GNSS_LON_signal : 32|32@1- (0.0000001,0) [-180|180] "deg"  ECU
+
+BO_ 1551 COLLISION: 2 ECU
+ SG_ COLLISION_INTENSITY_signal : 0|16@1+ (0.1,0) [0|6553.5] ""  ECU
+
+BO_ 1552 LANE_INVASION: 2 ECU
+ SG_ LANE_INVASION_TYPE_signal : 0|16@1+ (1,0) [0|65535] ""  ECU
+
+BO_ 1553 IMU_ACCEL: 6 ECU
+ SG_ IMU_ACCEL_X_signal : 0|16@1- (0.01,0) [-327.68|327.67] "m/s2"  ECU
+ SG_ IMU_ACCEL_Y_signal : 16|16@1- (0.01,0) [-327.68|327.67] "m/s2"  ECU
+ SG_ IMU_ACCEL_Z_signal : 32|16@1- (0.01,0) [-327.68|327.67] "m/s2"  ECU
+
+BO_ 1554 IMU_GYRO: 6 ECU
+ SG_ IMU_GYRO_X_signal : 0|16@1- (0.01,0) [-327.68|327.67] "deg/s"  ECU
+ SG_ IMU_GYRO_Y_signal : 16|16@1- (0.01,0) [-327.68|327.67] "deg/s"  ECU
+ SG_ IMU_GYRO_Z_signal : 32|16@1- (0.01,0) [-327.68|327.67] "deg/s"  ECU
+
+BO_ 1555 IMU_COMPASS: 2 ECU
+ SG_ IMU_COMPASS_signal : 0|16@1+ (0.01,0) [0|655.35] "deg"  ECU
+
+BO_ 1556 RADAR_TARGET: 8 ECU
+ SG_ RADAR_VEL_signal : 0|16@1- (0.01,0) [-327.68|327.67] "m/s"  ECU
+ SG_ RADAR_AZI_signal : 16|16@1- (0.01,0) [-327.68|327.67] "deg"  ECU
+ SG_ RADAR_ALT_signal : 32|16@1- (0.01,0) [-327.68|327.67] "deg"  ECU
+ SG_ RADAR_DEPTH_signal : 48|16@1+ (0.01,0) [0|655.35] "m"  ECU
+
 BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
 
 BA_DEF_DEF_ "GenMsgCycleTime" 0;
@@ -87,4 +116,11 @@ BA_ "GenMsgCycleTime" BO_ 1542 500;
 BA_ "GenMsgCycleTime" BO_ 1543 200;
 BA_ "GenMsgCycleTime" BO_ 1548 0;
 BA_ "GenMsgCycleTime" BO_ 1549 0;
+BA_ "GenMsgCycleTime" BO_ 1550 1000;
+BA_ "GenMsgCycleTime" BO_ 1551 0;
+BA_ "GenMsgCycleTime" BO_ 1552 0;
+BA_ "GenMsgCycleTime" BO_ 1553 100;
+BA_ "GenMsgCycleTime" BO_ 1554 100;
+BA_ "GenMsgCycleTime" BO_ 1555 100;
+BA_ "GenMsgCycleTime" BO_ 1556 0;
 

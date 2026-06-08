@@ -65,3 +65,38 @@ FULL_DBC = MINIMAL_DBC.replace(
     ' SG_ LIGHTS_Special2_signal     : 10|1@1+ (1,0) [0|1] "" ECU\n'
     '\nBA_ "GenMsgCycleTime" BO_ 1549 0;\n',
 )
+
+# FULL_DBC extended with all 6 sensor messages. Used in sensor encoding tests.
+SENSOR_DBC = FULL_DBC.replace(
+    'BA_ "GenMsgCycleTime" BO_ 1549 0;\n',
+    'BA_ "GenMsgCycleTime" BO_ 1549 0;\n'
+    '\nBO_ 1550 GNSS: 8 ECU\n'
+    ' SG_ GNSS_LAT_signal : 0|32@1- (0.0000001,0) [-90|90] "deg" ECU\n'
+    ' SG_ GNSS_LON_signal : 32|32@1- (0.0000001,0) [-180|180] "deg" ECU\n'
+    '\nBO_ 1551 COLLISION: 2 ECU\n'
+    ' SG_ COLLISION_INTENSITY_signal : 0|16@1+ (0.1,0) [0|6553.5] "" ECU\n'
+    '\nBO_ 1552 LANE_INVASION: 2 ECU\n'
+    ' SG_ LANE_INVASION_TYPE_signal : 0|16@1+ (1,0) [0|65535] "" ECU\n'
+    '\nBO_ 1553 IMU_ACCEL: 6 ECU\n'
+    ' SG_ IMU_ACCEL_X_signal : 0|16@1- (0.01,0) [-327.68|327.67] "m/s2" ECU\n'
+    ' SG_ IMU_ACCEL_Y_signal : 16|16@1- (0.01,0) [-327.68|327.67] "m/s2" ECU\n'
+    ' SG_ IMU_ACCEL_Z_signal : 32|16@1- (0.01,0) [-327.68|327.67] "m/s2" ECU\n'
+    '\nBO_ 1554 IMU_GYRO: 6 ECU\n'
+    ' SG_ IMU_GYRO_X_signal : 0|16@1- (0.01,0) [-327.68|327.67] "deg/s" ECU\n'
+    ' SG_ IMU_GYRO_Y_signal : 16|16@1- (0.01,0) [-327.68|327.67] "deg/s" ECU\n'
+    ' SG_ IMU_GYRO_Z_signal : 32|16@1- (0.01,0) [-327.68|327.67] "deg/s" ECU\n'
+    '\nBO_ 1555 IMU_COMPASS: 2 ECU\n'
+    ' SG_ IMU_COMPASS_signal : 0|16@1+ (0.01,0) [0|655.35] "deg" ECU\n'
+    '\nBA_ "GenMsgCycleTime" BO_ 1550 1000;\n'
+    'BA_ "GenMsgCycleTime" BO_ 1551 0;\n'
+    'BA_ "GenMsgCycleTime" BO_ 1552 0;\n'
+    'BA_ "GenMsgCycleTime" BO_ 1553 100;\n'
+    'BA_ "GenMsgCycleTime" BO_ 1554 100;\n'
+    'BA_ "GenMsgCycleTime" BO_ 1555 100;\n'
+    '\nBO_ 1556 RADAR_TARGET: 8 ECU\n'
+    ' SG_ RADAR_VEL_signal : 0|16@1- (0.01,0) [-327.68|327.67] "m/s" ECU\n'
+    ' SG_ RADAR_AZI_signal : 16|16@1- (0.01,0) [-327.68|327.67] "deg" ECU\n'
+    ' SG_ RADAR_ALT_signal : 32|16@1- (0.01,0) [-327.68|327.67] "deg" ECU\n'
+    ' SG_ RADAR_DEPTH_signal : 48|16@1+ (0.01,0) [0|655.35] "m" ECU\n'
+    '\nBA_ "GenMsgCycleTime" BO_ 1556 0;\n',
+)
