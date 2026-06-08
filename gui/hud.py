@@ -62,7 +62,7 @@ class HUD(object):
         default_font = 'ubuntumono'
         mono = default_font if default_font in fonts else fonts[0]
         mono = pygame.font.match_font(mono)
-        self._font_mono = pygame.font.Font(mono, 12 if os.name == 'nt' else 14)
+        self._font_mono = pygame.font.Font(mono, 12 if os.name == 'nt' else 24)
         self._notifications = FadingText(font, (width, 40), (0, height - 40))
         self.help = HelpText(pygame.font.Font(mono, 16), width, height)
         self.server_fps = 0
@@ -166,21 +166,22 @@ class HUD(object):
 
     def render(self, display):
         if self._show_info:
-            info_surface = pygame.Surface((220, self.dim[1]))
+            line_height = self._font_mono.get_linesize()
+            bar_h_offset = 8 + self._font_mono.size('Hand brake:')[0] + 4
+            bar_width = bar_h_offset - 8
+            info_surface = pygame.Surface((bar_h_offset + bar_width + 16, self.dim[1]))
             info_surface.set_alpha(100)
             display.blit(info_surface, (0, 0))
             v_offset = 4
-            bar_h_offset = 100
-            bar_width = 106
             for item in self._info_text:
-                if v_offset + 18 > self.dim[1]:
+                if v_offset + line_height > self.dim[1]:
                     break
                 if isinstance(item, list):
                     if len(item) > 1:
                         points = [(x + 8, v_offset + 8 + (1.0 - y) * 30) for x, y in enumerate(item)]
                         pygame.draw.lines(display, (255, 136, 0), False, points, 2)
                     item = None
-                    v_offset += 18
+                    v_offset += line_height
                 elif isinstance(item, tuple):
                     if isinstance(item[1], bool):
                         rect = pygame.Rect((bar_h_offset, v_offset + 8), (6, 6))
@@ -198,6 +199,6 @@ class HUD(object):
                 if item:  # At this point has to be a str.
                     surface = self._font_mono.render(item, True, (255, 255, 255))
                     display.blit(surface, (8, v_offset))
-                v_offset += 18
+                v_offset += line_height
         self._notifications.render(display)
         self.help.render(display)
