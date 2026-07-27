@@ -155,7 +155,8 @@ After a few seconds, the Pygame windows for the CARLA client and vehicle control
 
 ## Map and vehicle configuration
 
-Choose the CARLA map and the exact vehicle blueprint in [`config.yaml`](config.yaml):
+Choose the CARLA map and exact vehicle blueprint in
+[`config/config.yaml`](config/config.yaml):
 
 ```yaml
 map: Town01

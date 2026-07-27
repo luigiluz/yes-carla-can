@@ -40,7 +40,7 @@ from can_network.network import CAN_Network, VCAN_CHANNEL
 from gui import CANTrafficDisplay, HUD, KeyboardControl, World
 
 
-CONFIG_PATH = Path(__file__).with_name("config.yaml")
+CONFIG_PATH = Path(__file__).parent / "config" / "config.yaml"
 
 
 def load_config(path=CONFIG_PATH):
@@ -48,21 +48,25 @@ def load_config(path=CONFIG_PATH):
         with Path(path).open("r", encoding="utf-8") as config_file:
             config = yaml.safe_load(config_file)
     except (OSError, yaml.YAMLError) as error:
-        raise ValueError(f"Could not load config.yaml: {error}") from None
+        raise ValueError(f"Could not load config/config.yaml: {error}") from None
 
     if not isinstance(config, dict) or set(config) != {"map", "vehicle"}:
-        raise ValueError("config.yaml must contain exactly 'map' and 'vehicle'.")
+        raise ValueError(
+            "config/config.yaml must contain exactly 'map' and 'vehicle'."
+        )
 
     map_name = config["map"]
     vehicle_blueprint = config["vehicle"]
     if not isinstance(map_name, str) or not map_name.strip():
-        raise ValueError("The config.yaml 'map' value must be a non-empty string.")
+        raise ValueError(
+            "The config/config.yaml 'map' value must be a non-empty string."
+        )
     if (
         not isinstance(vehicle_blueprint, str)
         or not vehicle_blueprint.strip().startswith("vehicle.")
     ):
         raise ValueError(
-            "The config.yaml 'vehicle' value must be an exact vehicle blueprint."
+            "The config/config.yaml 'vehicle' value must be an exact vehicle blueprint."
         )
 
     return map_name.strip(), vehicle_blueprint.strip()
