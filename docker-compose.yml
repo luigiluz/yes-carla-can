@@ -1,7 +1,7 @@
 services:
   server:
     image: carlasim/carla:0.9.15
-    runtime: nvidia
+    gpus: all
     network_mode: host
     privileged: true
     environment:
