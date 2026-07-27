@@ -8,11 +8,12 @@ from gui.functions import get_actor_display_name
 
 
 class CollisionSensor(object):
-    def __init__(self, parent_actor, hud):
+    def __init__(self, parent_actor, hud, can_net):
         self.sensor = None
         self.history = []
         self._parent = parent_actor
         self.hud = hud
+        self._can_net = can_net
         world = self._parent.get_world()
         bp = world.get_blueprint_library().find('sensor.other.collision')
         self.sensor = world.spawn_actor(bp, carla.Transform(), attach_to=self._parent)
@@ -39,3 +40,4 @@ class CollisionSensor(object):
         self.history.append((event.frame, intensity))
         if len(self.history) > 4000:
             self.history.pop(0)
+        self._can_net.send_collision_msg(intensity)

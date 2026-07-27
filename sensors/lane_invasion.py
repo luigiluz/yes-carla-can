@@ -4,8 +4,9 @@ import carla
 
 
 class LaneInvasionSensor(object):
-    def __init__(self, parent_actor, hud):
+    def __init__(self, parent_actor, hud, can_net):
         self.sensor = None
+        self._can_net = can_net
 
         # If the spawn object is not a vehicle, we cannot use the Lane Invasion Sensor
         if parent_actor.type_id.startswith("vehicle."):
@@ -27,3 +28,5 @@ class LaneInvasionSensor(object):
         lane_types = set(x.type for x in event.crossed_lane_markings)
         text = ['%r' % str(x).split()[-1] for x in lane_types]
         self.hud.notification('Crossed line %s' % ' and '.join(text))
+        bitmask = sum(1 << int(t) for t in lane_types)
+        self._can_net.send_lane_invasion_msg(bitmask)

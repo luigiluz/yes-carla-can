@@ -3,9 +3,10 @@ import carla
 
 
 class GnssSensor(object):
-    def __init__(self, parent_actor):
+    def __init__(self, parent_actor, can_net):
         self.sensor = None
         self._parent = parent_actor
+        self._can_net = can_net
         self.lat = 0.0
         self.lon = 0.0
         world = self._parent.get_world()
@@ -23,3 +24,4 @@ class GnssSensor(object):
             return
         self.lat = event.latitude
         self.lon = event.longitude
+        self._can_net.send_gnss_msg(self.lat, self.lon)

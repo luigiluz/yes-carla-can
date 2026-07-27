@@ -8,7 +8,7 @@ from gui.functions import *
 from gui.camera_manager import CameraManager
 
 class World(object):
-    def __init__(self, carla_world, hud, args):
+    def __init__(self, carla_world, hud, args, can_net):
         self.world = carla_world
         self.sync = args.sync
         self.actor_role_name = args.rolename
@@ -20,6 +20,7 @@ class World(object):
             print('  Make sure it exists, has the same name of your town, and is correct.')
             sys.exit(1)
         self.hud = hud
+        self.can_net = can_net
         self.player = None
         self.collision_sensor = None
         self.lane_invasion_sensor = None
@@ -102,10 +103,10 @@ class World(object):
             self.show_vehicle_telemetry = False
             self.modify_vehicle_physics(self.player)
         # Set up the sensors.
-        self.collision_sensor = CollisionSensor(self.player, self.hud)
-        self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
-        self.gnss_sensor = GnssSensor(self.player)
-        self.imu_sensor = IMUSensor(self.player)
+        self.collision_sensor = CollisionSensor(self.player, self.hud, self.can_net)
+        self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud, self.can_net)
+        self.gnss_sensor = GnssSensor(self.player, self.can_net)
+        self.imu_sensor = IMUSensor(self.player, self.can_net)
         self.camera_manager = CameraManager(self.player, self.hud, self._gamma)
         self.camera_manager.transform_index = cam_pos_index
         self.camera_manager.set_sensor(cam_index, notify=False)
@@ -141,7 +142,7 @@ class World(object):
 
     def toggle_radar(self):
         if self.radar_sensor is None:
-            self.radar_sensor = RadarSensor(self.player)
+            self.radar_sensor = RadarSensor(self.player, self.can_net)
         elif self.radar_sensor.sensor is not None:
             self.radar_sensor.sensor.destroy()
             self.radar_sensor = None

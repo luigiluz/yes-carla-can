@@ -15,9 +15,11 @@ Start the "Yes, CARLA CAN" simulation environment.
 What this script does:
   1. Launches the CARLA simulator in headless, low-quality mode
   2. Creates the virtual CAN bus (${VCAN_INTERFACE:-vcan0}) using the Linux kernel vcan module
-  3. Waits 5 seconds for CARLA to initialise
-  4. Starts the CARLA client module (spawns the vehicle and sensors)
-  5. Starts the vehicle controls module (translates vehicle state into CAN frames)
+  3. Creates a second virtual CAN bus (vcan1) for the attacker and bridges them via can-gw
+     so that candump labels attacker frames as 'R' and normal frames as 'T'
+  4. Waits 5 seconds for CARLA to initialise
+  5. Starts the CARLA client module (spawns the vehicle and sensors)
+  6. Starts the vehicle controls module (translates vehicle state into CAN frames)
 
 Options:
   -h, --help      Show this help message and exit
@@ -66,8 +68,18 @@ echo "Starting CARLA simulator..."
 # Set up virtual CAN bus
 echo "Setting up virtual CAN bus..."
 sudo modprobe vcan
+sudo modprobe can-gw
 sudo ip link add dev "${VCAN_INTERFACE}" type vcan
 sudo ip link set up "${VCAN_INTERFACE}"
+
+# Set up attacker CAN bus and bridge it to the main bus via can-gw.
+# Frames sent on vcan1 are forwarded to vcan0 and marked 'R' (received) by candump,
+# while frames sent directly on vcan0 are marked 'T' (transmitted).
+echo "Setting up attacker CAN bus and can-gw bridge..."
+sudo ip link add dev vcan1 type vcan
+sudo ip link set up vcan1
+sudo cangw -A -s vcan1 -d "${VCAN_INTERFACE}" -e
+sudo cangw -A -s "${VCAN_INTERFACE}" -d vcan1 -e
 
 # Give CARLA a moment to initialise before connecting clients
 echo "Waiting for CARLA to start..."

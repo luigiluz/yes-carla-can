@@ -5,7 +5,7 @@ import time
 import random
 
 from attacks.reverse_engineering import FEATURE_CAN_ID_PAYLOAD_MAPPER
-from can_network import VCAN_CHANNEL, CAN_INTERFACE
+from can_network import VCAN_ATTACKER_CHANNEL, CAN_INTERFACE
 
 # ---------------------------------------------------------------------------
 # Live status display
@@ -98,9 +98,13 @@ def main():
     spoofing_attacks = list(FEATURE_CAN_ID_PAYLOAD_MAPPER.keys())
     available_features = [*spoofing_attacks, "fuzzy", "denial_of_service"]
 
-    parser = argparse.ArgumentParser(description="Perform CAN network attacks.")
+    parser = argparse.ArgumentParser(
+        description="Perform CAN network attacks.",
+        epilog="Attacker frames are sent on vcan1 (default), which bridges to vcan0 via vxcan/can-gw so candump marks them as 'R' (received) for labeled datasets.",
+    )
     parser.add_argument("--feature", choices=available_features, help="Feature to attack")
     parser.add_argument("--period", type=float, default=0.1, help="Period between messages in seconds")
+    parser.add_argument("--vcan", default=VCAN_ATTACKER_CHANNEL, help=f"CAN interface for the attacker bus (default: {VCAN_ATTACKER_CHANNEL})")
 
     args = parser.parse_args()
     if not args.feature:
@@ -108,7 +112,7 @@ def main():
         return
     if args.feature not in available_features:
         print(f"Feature '{args.feature}' is not available. Choose from {available_features}.")
-    bus = can.interface.Bus(channel=VCAN_CHANNEL, interface=CAN_INTERFACE)
+    bus = can.interface.Bus(channel=args.vcan, interface=CAN_INTERFACE)
 
     try:
         if args.feature == "fuzzy":

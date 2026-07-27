@@ -1,9 +1,10 @@
 import can
 import carla
 
-from can_network.dbc import load_and_validate, REQUIRED_SIGNALS
+from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
 
 VCAN_CHANNEL = "vcan0"
+VCAN_ATTACKER_CHANNEL = "vcan1"
 CAN_INTERFACE = "socketcan"
 
 
@@ -41,6 +42,22 @@ class CAN_Network(object):
             is_extended_id=dbc_msg.is_extended_frame,
         )
 
+    def _build_sensor_msg(self, message_name, signals_dict) -> can.Message:
+        """Encode a multi-signal CAN message from the DBC and return a can.Message ready to send."""
+        try:
+            dbc_msg = self.db.get_message_by_name(message_name)
+        except KeyError:
+            available = [m.name for m in self.db.messages]
+            raise RuntimeError(
+                f"[CAN] Message '{message_name}' not found in DBC. "
+                f"Available: {available}"
+            ) from None
+        return can.Message(
+            arbitration_id=dbc_msg.frame_id,
+            data=dbc_msg.encode(signals_dict),
+            is_extended_id=dbc_msg.is_extended_frame,
+        )
+
     # ------------------------------------------------------------------
     # Senders
     # ------------------------------------------------------------------
@@ -49,9 +66,14 @@ class CAN_Network(object):
         self.bus.send(self._build_msg("DOORS", True))
 
     def send_current_lights_msg(self, lights):
-        # VehicleLightState values above 0xFF are carla-only and not in the DBC;
-        # mask them out before encoding.
-        self.bus.send(self._build_msg("GENERAL_LIGHTS", int(lights) & 0xFF))
+        dbc_msg = self.db.get_message_by_name("GENERAL_LIGHTS")
+        lights_int = int(lights)
+        signal_dict = {sig: int(bool(lights_int & flag)) for sig, flag in LIGHT_SIGNALS.items()}
+        self.bus.send(can.Message(
+            arbitration_id=dbc_msg.frame_id,
+            data=dbc_msg.encode(signal_dict),
+            is_extended_id=dbc_msg.is_extended_frame,
+        ))
 
     def send_throttle_msg(self, controls):
         self.bus.send(self._build_msg("THROTTLE", int(controls.throttle * 255)))
@@ -78,6 +100,53 @@ class CAN_Network(object):
         # controls.autopilot is not a standard VehicleControl field;
         # adapt the value source here if you have an autopilot state elsewhere.
         pass
+
+    # ------------------------------------------------------------------
+    # Sensor senders
+    # ------------------------------------------------------------------
+
+    def send_gnss_msg(self, lat, lon):
+        self.bus.send(self._build_sensor_msg("GNSS", {
+            "GNSS_LAT_signal": lat,
+            "GNSS_LON_signal": lon,
+        }))
+
+    def send_collision_msg(self, intensity):
+        self.bus.send(self._build_sensor_msg("COLLISION", {
+            "COLLISION_INTENSITY_signal": min(intensity, 6553.5),
+        }))
+
+    def send_lane_invasion_msg(self, bitmask):
+        self.bus.send(self._build_sensor_msg("LANE_INVASION", {
+            "LANE_INVASION_TYPE_signal": bitmask,
+        }))
+
+    def send_imu_accel_msg(self, x, y, z):
+        self.bus.send(self._build_sensor_msg("IMU_ACCEL", {
+            "IMU_ACCEL_X_signal": x,
+            "IMU_ACCEL_Y_signal": y,
+            "IMU_ACCEL_Z_signal": z,
+        }))
+
+    def send_imu_gyro_msg(self, x, y, z):
+        self.bus.send(self._build_sensor_msg("IMU_GYRO", {
+            "IMU_GYRO_X_signal": x,
+            "IMU_GYRO_Y_signal": y,
+            "IMU_GYRO_Z_signal": z,
+        }))
+
+    def send_imu_compass_msg(self, compass):
+        self.bus.send(self._build_sensor_msg("IMU_COMPASS", {
+            "IMU_COMPASS_signal": compass,
+        }))
+
+    def send_radar_target_msg(self, velocity, azimuth, altitude, depth):
+        self.bus.send(self._build_sensor_msg("RADAR_TARGET", {
+            "RADAR_VEL_signal":   velocity,
+            "RADAR_AZI_signal":   azimuth,
+            "RADAR_ALT_signal":   altitude,
+            "RADAR_DEPTH_signal": depth,
+        }))
 
     def send_msg(self, controls):
         """Convenience method — sends all messages at once (bypasses per-message timing)."""
@@ -142,9 +211,14 @@ class CAN_Network(object):
                     self.door_change_state = True
 
             elif name == "GENERAL_LIGHTS":
-                self.current_lights = carla.VehicleLightState(
-                    int(data[REQUIRED_SIGNALS["GENERAL_LIGHTS"]])
-                )
+                lights_int = 0
+                for sig, flag in LIGHT_SIGNALS.items():
+                    if data.get(sig, 0):
+                        lights_int |= flag
+                self.current_lights = carla.VehicleLightState(lights_int)
+
+            elif name in SENSOR_MESSAGES:
+                pass  # sensor telemetry — published by the CARLA client; no actuation here
 
             try:
                 recv_msg = self.bus.recv(timeout=0)

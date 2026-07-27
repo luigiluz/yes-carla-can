@@ -10,7 +10,8 @@ What this script does:
   1. Stops the vehicle controls module
   2. Stops the CARLA client module (waits up to 10 seconds for a clean exit)
   3. Stops the CARLA simulator
-  4. Removes the virtual CAN bus (vcan0) and unloads the vcan kernel module
+  4. Removes the vxcan bridge (can-gw routes, vcan1)
+  5. Removes the virtual CAN bus (vcan0) and unloads the vcan/can-gw kernel modules
 
 Options:
   -h, --help    Show this help message and exit
@@ -71,8 +72,13 @@ fi
 
 # Bring virtual CAN bus down
 echo "Bringing virtual CAN bus down..."
+sudo cangw -D -s vcan1 -d "${VCAN_INTERFACE}" -e 2>/dev/null || true
+sudo cangw -D -s "${VCAN_INTERFACE}" -d vcan1 -e 2>/dev/null || true
+sudo ip link set down vcan1 2>/dev/null || true
+sudo ip link delete vcan1 2>/dev/null || true
 sudo ip link set down "${VCAN_INTERFACE}"
 sudo ip link delete "${VCAN_INTERFACE}"
+sudo modprobe -r can-gw 2>/dev/null || true
 sudo modprobe -r vcan
 
 echo "Environment is down!"

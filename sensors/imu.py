@@ -4,9 +4,10 @@ import carla
 
 
 class IMUSensor(object):
-    def __init__(self, parent_actor):
+    def __init__(self, parent_actor, can_net):
         self.sensor = None
         self._parent = parent_actor
+        self._can_net = can_net
         self.accelerometer = (0.0, 0.0, 0.0)
         self.gyroscope = (0.0, 0.0, 0.0)
         self.compass = 0.0
@@ -35,3 +36,6 @@ class IMUSensor(object):
             max(limits[0], min(limits[1], math.degrees(sensor_data.gyroscope.y))),
             max(limits[0], min(limits[1], math.degrees(sensor_data.gyroscope.z))))
         self.compass = math.degrees(sensor_data.compass)
+        self._can_net.send_imu_accel_msg(*self.accelerometer)
+        self._can_net.send_imu_gyro_msg(*self.gyroscope)
+        self._can_net.send_imu_compass_msg(self.compass)
