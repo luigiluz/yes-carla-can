@@ -12,9 +12,7 @@ DETECTOR_FACTORY = {
 
 DEFAULT_DATA_PATH = Path(__file__).parent / "traffic_logs" / "logs_for_ml_ids_training_parsed_statistics.json"
 
-def main():
-    print("Intrusion Detection System for CAN Bus")
-
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Intrusion Detection System for CAN Bus")
     parser.add_argument("--detector", type=str, required=True, choices=DETECTOR_FACTORY.keys(),
                         help=f"Intrusion detection algorithm to use. Available options: {', '.join(DETECTOR_FACTORY.keys())}")
@@ -22,16 +20,25 @@ def main():
                         help=f"Path to the baseline statistics JSON file used by the id_time detector (default: {DEFAULT_DATA_PATH})")
     parser.add_argument("--ml-model", type=Path, default=None,
                         help="Path to the trained Isolation Forest PKL file (required when --detector ml)")
+    parser.add_argument("--vcan", default=VCAN_CHANNEL,
+                        help=f"CAN interface to monitor (default: {VCAN_CHANNEL})")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.detector == "ml" and args.ml_model is None:
         parser.error("--ml-model is required when using --detector ml")
 
+    return args
+
+
+def main():
+    print("Intrusion Detection System for CAN Bus")
+    args = parse_args()
+
     selected_detector = DETECTOR_FACTORY[args.detector]()
     model_path = args.ml_model if args.detector == "ml" else args.id_time_statistics
     selected_detector.load(model_path)
-    bus = can.interface.Bus(channel=VCAN_CHANNEL, interface=CAN_INTERFACE)
+    bus = can.interface.Bus(channel=args.vcan, interface=CAN_INTERFACE)
 
     try:
         while True:
