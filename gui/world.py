@@ -8,10 +8,11 @@ from gui.functions import *
 from gui.camera_manager import CameraManager
 
 class World(object):
-    def __init__(self, carla_world, hud, args, can_net):
+    def __init__(self, carla_world, hud, args, can_net, vehicle_blueprint):
         self.world = carla_world
         self.sync = args.sync
         self.actor_role_name = args.rolename
+        self.vehicle_blueprint = vehicle_blueprint
         try:
             self.map = self.world.get_map()
         except RuntimeError as error:
@@ -30,8 +31,6 @@ class World(object):
         self.camera_manager = None
         self._weather_presets = find_weather_presets()
         self._weather_index = 0
-        self._actor_filter = args.filter
-        self._actor_generation = args.generation
         self._gamma = args.gamma
         self.restart()
         self.world.on_tick(hud.on_world_tick)
@@ -61,11 +60,12 @@ class World(object):
         # Keep same camera config if the camera manager exists.
         cam_index = self.camera_manager.index if self.camera_manager is not None else 0
         cam_pos_index = self.camera_manager.transform_index if self.camera_manager is not None else 0
-        # Get a random blueprint.
-        blueprint_list = get_actor_blueprints(self.world, self._actor_filter, self._actor_generation)
-        if not blueprint_list:
-            raise ValueError("Couldn't find any blueprints with the specified filters")
-        blueprint = random.choice(blueprint_list)
+        try:
+            blueprint = self.world.get_blueprint_library().find(self.vehicle_blueprint)
+        except (IndexError, RuntimeError):
+            raise ValueError(
+                "Vehicle blueprint '{}' was not found.".format(self.vehicle_blueprint)
+            ) from None
         blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('terramechanics'):
             blueprint.set_attribute('terramechanics', 'true')

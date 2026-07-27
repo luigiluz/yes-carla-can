@@ -12,6 +12,7 @@ import argparse
 import glob
 import logging
 import os
+from pathlib import Path
 import signal
 import sys
 
@@ -33,12 +34,41 @@ import tkinter as tk
 
 import carla
 import pygame
+import yaml
 
 from can_network.network import CAN_Network, VCAN_CHANNEL
 from gui import CANTrafficDisplay, HUD, KeyboardControl, World
 
 
-def game_loop(args):
+CONFIG_PATH = Path(__file__).with_name("config.yaml")
+
+
+def load_config(path=CONFIG_PATH):
+    try:
+        with Path(path).open("r", encoding="utf-8") as config_file:
+            config = yaml.safe_load(config_file)
+    except (OSError, yaml.YAMLError) as error:
+        raise ValueError(f"Could not load config.yaml: {error}") from None
+
+    if not isinstance(config, dict) or set(config) != {"map", "vehicle"}:
+        raise ValueError("config.yaml must contain exactly 'map' and 'vehicle'.")
+
+    map_name = config["map"]
+    vehicle_blueprint = config["vehicle"]
+    if not isinstance(map_name, str) or not map_name.strip():
+        raise ValueError("The config.yaml 'map' value must be a non-empty string.")
+    if (
+        not isinstance(vehicle_blueprint, str)
+        or not vehicle_blueprint.strip().startswith("vehicle.")
+    ):
+        raise ValueError(
+            "The config.yaml 'vehicle' value must be an exact vehicle blueprint."
+        )
+
+    return map_name.strip(), vehicle_blueprint.strip()
+
+
+def game_loop(args, map_name, vehicle_blueprint):
     pygame.init()
     pygame.font.init()
 
@@ -57,8 +87,10 @@ def game_loop(args):
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
 
+        logging.info("loading map %s", map_name)
+        sim_world = client.load_world(map_name)
+
         # Disable rendering and set fixed time step
-        sim_world = client.get_world()
         world_settings = sim_world.get_settings()
         world_settings.no_rendering_mode = True  # Disable rendering
         # fps = 30
@@ -89,7 +121,8 @@ def game_loop(args):
         pygame.display.flip()
 
         hud = HUD(width / 2, height / 2)
-        world = World(sim_world, hud, args, can_bus)
+        world = World(sim_world, hud, args, can_bus, vehicle_blueprint)
+        logging.info("spawned vehicle %s", vehicle_blueprint)
         controller = KeyboardControl(world, args.autopilot)
 
         if args.sync:
@@ -170,18 +203,6 @@ def main():
         help="window resolution (default: 1280x720)",
     )
     argparser.add_argument(
-        "--filter",
-        metavar="PATTERN",
-        default="vehicle.*",
-        help='actor filter (default: "vehicle.*")',
-    )
-    argparser.add_argument(
-        "--generation",
-        metavar="G",
-        default="2",
-        help='restrict to certain actor generation (values: "1","2","All" - default: "2")',
-    )
-    argparser.add_argument(
         "--rolename",
         metavar="NAME",
         default="hero",
@@ -214,7 +235,11 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
     try:
-        game_loop(args)
+        map_name, vehicle_blueprint = load_config()
+        game_loop(args, map_name, vehicle_blueprint)
+    except ValueError as error:
+        logging.error("%s", error)
+        raise SystemExit(2) from None
     except KeyboardInterrupt:
         print("\nCancelled by user. Bye!")
 

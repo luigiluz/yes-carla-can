@@ -46,6 +46,7 @@ services:
       - /lib/modules:/lib/modules:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ${XAUTHORITY:-${HOME}/.Xauthority}:/tmp/.docker.xauth:ro
+      - ./config.yaml:/app/config.yaml:ro
     depends_on:
       server:
         condition: service_healthy

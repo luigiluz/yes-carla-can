@@ -153,6 +153,22 @@ This will:
 
 After a few seconds, the Pygame windows for the CARLA client and vehicle controls will appear.
 
+## Map and vehicle configuration
+
+Choose the CARLA map and the exact vehicle blueprint in [`config.yaml`](config.yaml):
+
+```yaml
+map: Town01
+vehicle: vehicle.tesla.model3
+```
+
+The client loads the complete map normally and spawns the configured vehicle. No
+map-layer configuration is applied. After editing the file, restart the client:
+
+```bash
+docker compose restart client
+```
+
 ## Running experiments
 
 With the platform running, open a separate terminal and change to the repository
