@@ -8,6 +8,7 @@ CARLA_HOST="${CARLA_HOST:-127.0.0.1}"
 CARLA_PORT="${CARLA_PORT:-2000}"
 
 CLIENT_PID=""
+AUTOPILOT_PID=""
 CONTROLS_PID=""
 CLEANED_UP=0
 OWNED_INTERFACES=()
@@ -32,8 +33,10 @@ cleanup() {
 
     echo "Shutting down client processes and virtual CAN interfaces..."
     [[ -z "${CONTROLS_PID}" ]] || kill "${CONTROLS_PID}" 2>/dev/null || true
+    [[ -z "${AUTOPILOT_PID}" ]] || kill "${AUTOPILOT_PID}" 2>/dev/null || true
     [[ -z "${CLIENT_PID}" ]] || kill "${CLIENT_PID}" 2>/dev/null || true
     [[ -z "${CONTROLS_PID}" ]] || wait "${CONTROLS_PID}" 2>/dev/null || true
+    [[ -z "${AUTOPILOT_PID}" ]] || wait "${AUTOPILOT_PID}" 2>/dev/null || true
     [[ -z "${CLIENT_PID}" ]] || wait "${CLIENT_PID}" 2>/dev/null || true
 
     remove_routes
@@ -122,6 +125,14 @@ if ! kill -0 "${CLIENT_PID}" 2>/dev/null; then
     exit "${CLIENT_STATUS}"
 fi
 
+echo "Starting CAN autopilot module..."
+python autopilot_module.py \
+    --host "${CARLA_HOST}" \
+    --port "${CARLA_PORT}" \
+    --dbc "${DBC_PATH}" \
+    --vcan "${VCAN_INTERFACE}" &
+AUTOPILOT_PID=$!
+
 echo "Starting vehicle controls module..."
 python vehicle_controls_module.py \
     --dbc "${DBC_PATH}" \
@@ -133,11 +144,11 @@ echo "  docker compose exec client python cyberattacks_module.py --feature hand_
 echo "  docker compose exec client python intrusion_detection_module.py --detector id_time --vcan ${VCAN_INTERFACE}"
 echo "  docker compose exec client candump ${VCAN_INTERFACE}"
 
-if wait -n "${CLIENT_PID}" "${CONTROLS_PID}"; then
+if wait -n "${CLIENT_PID}" "${AUTOPILOT_PID}" "${CONTROLS_PID}"; then
     CHILD_STATUS=0
 else
     CHILD_STATUS=$?
 fi
 
-echo "A client process exited (status ${CHILD_STATUS}); stopping the other process."
+echo "A client process exited (status ${CHILD_STATUS}); stopping the other processes."
 exit "${CHILD_STATUS}"

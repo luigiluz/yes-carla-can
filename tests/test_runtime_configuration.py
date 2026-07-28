@@ -1,6 +1,6 @@
 """Tests for configurable runtime interfaces used by Docker Compose."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from cyberattacks_module import parse_args as parse_attack_args
 from gui.can_traffic_display import CANTrafficDisplay
@@ -45,3 +45,23 @@ def test_keyboard_sender_does_not_schedule_sensor_telemetry():
     sender = KeyboardSenderControl(can_net)
 
     assert set(sender._msg_timers) == {"THROTTLE"}
+
+
+def test_keyboard_sender_suppresses_manual_frames_during_autopilot():
+    can_net = type(
+        "CanNetworkStub",
+        (),
+        {
+            "cycle_times": {"THROTTLE": 0.1, "AUTOPILOT": 0.5},
+            "send_throttle_msg": MagicMock(),
+            "send_autopilot_msg": MagicMock(),
+        },
+    )()
+    sender = KeyboardSenderControl(can_net, start_in_autopilot=True)
+    sender._msg_timers = {"THROTTLE": [0.1, 0.0], "AUTOPILOT": [0.5, 0.0]}
+
+    with patch("vehicle_controls_module.time.time", return_value=1.0):
+        sender._send_periodic_messages()
+
+    can_net.send_throttle_msg.assert_not_called()
+    can_net.send_autopilot_msg.assert_called_once_with(True)

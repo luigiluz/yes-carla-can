@@ -13,7 +13,7 @@ MESSAGES = {
     "HAND_BRAKE":          ("HAND_BRAKE_signal",          "send_hand_brake_msg",          True),
     "MANUAL_TRANSMISSION": ("MANUAL_TRANSMISSION_signal", "send_manual_transmission_msg", True),
     "GEAR":                ("GEAR_signal",                "send_gear_msg",                True),
-    "AUTOPILOT":           (None,                         "send_autopilot_msg",           False),
+    "AUTOPILOT":           ("AUTOPILOT_signal",          "send_autopilot_msg",           True),
     "DOORS":               ("DOORS_signal",               "send_switch_door_state_msg",  False),
     "GENERAL_LIGHTS":      (None,                         "send_current_lights_msg",     False),
 }

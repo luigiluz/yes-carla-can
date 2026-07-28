@@ -174,12 +174,6 @@ def game_loop(args, config):
             traffic_manager = client.get_trafficmanager()
             traffic_manager.set_synchronous_mode(True)
 
-        if args.autopilot and not sim_world.get_settings().synchronous_mode:
-            print(
-                "WARNING: You are currently in asynchronous mode and could "
-                "experience some issues with the traffic simulation"
-            )
-
         display = pygame.display.set_mode(
             (width / 2, height / 2), pygame.HWSURFACE | pygame.DOUBLEBUF
         )
@@ -191,7 +185,7 @@ def game_loop(args, config):
         logging.info("spawned vehicle %s", config["vehicle"])
 
         traffic_process = start_traffic(args, config)
-        controller = KeyboardControl(world, args.autopilot)
+        controller = KeyboardControl(world)
 
         if args.sync:
             sim_world.tick()
@@ -203,7 +197,7 @@ def game_loop(args, config):
             if args.sync:
                 sim_world.tick()
             clock.tick_busy_loop(60)
-            if controller.parse_events(client, world, clock, args.sync, can_bus):
+            if controller.parse_events(client, world, clock, can_bus):
                 return
             world.tick(clock)
             world.render(display)
@@ -262,9 +256,6 @@ def main():
         default=2000,
         type=int,
         help="TCP port to listen to (default: 2000)",
-    )
-    argparser.add_argument(
-        "-a", "--autopilot", action="store_true", help="enable autopilot"
     )
     argparser.add_argument(
         "--res",

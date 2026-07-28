@@ -1,6 +1,6 @@
 """Shared DBC content strings used across the test suite."""
 
-# All 7 required messages, no optional messages (DOORS / GENERAL_LIGHTS absent).
+# All 8 required messages, no optional messages (DOORS / GENERAL_LIGHTS absent).
 # Used in test_dbc.py to verify optional-message absence.
 MINIMAL_DBC = """\
 VERSION ""
@@ -26,6 +26,9 @@ BO_ 1539 REVERSE: 1 ECU
 BO_ 1540 HAND_BRAKE: 1 ECU
  SG_ HAND_BRAKE_signal : 0|8@1+ (1,0) [0|255] "" ECU
 
+BO_ 1541 AUTOPILOT: 4 ECU
+ SG_ AUTOPILOT_signal : 0|8@1+ (1,0) [0|255] "" ECU
+
 BO_ 1542 MANUAL_TRANSMISSION: 1 ECU
  SG_ MANUAL_TRANSMISSION_signal : 0|8@1+ (1,0) [0|255] "" ECU
 
@@ -41,12 +44,13 @@ BA_ "GenMsgCycleTime" BO_ 1537 100;
 BA_ "GenMsgCycleTime" BO_ 1538 100;
 BA_ "GenMsgCycleTime" BO_ 1539 200;
 BA_ "GenMsgCycleTime" BO_ 1540 200;
+BA_ "GenMsgCycleTime" BO_ 1541 500;
 BA_ "GenMsgCycleTime" BO_ 1542 500;
 BA_ "GenMsgCycleTime" BO_ 1543 200;
 
 """
 
-# All 7 required messages plus the optional GENERAL_LIGHTS message (11 × 1-bit signals).
+# All 8 required messages plus the optional GENERAL_LIGHTS message (11 × 1-bit signals).
 # Used in test_network_encoding.py which tests the lights encoding logic.
 FULL_DBC = MINIMAL_DBC.replace(
     'BA_ "GenMsgCycleTime" BO_ 1543 200;\n',

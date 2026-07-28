@@ -117,6 +117,23 @@ def test_brake_encoding(net_and_bus, brake, expected_byte):
     assert _decode_last_sent(net, mock_bus)["BRAKE_signal"] == expected_byte
 
 
+@pytest.mark.parametrize("enabled, expected_byte", [(False, 0), (True, 1)])
+def test_autopilot_encoding(net_and_bus, enabled, expected_byte):
+    net, mock_bus = net_and_bus
+    net.send_autopilot_msg(enabled)
+    assert _decode_last_sent(net, mock_bus)["AUTOPILOT_signal"] == expected_byte
+
+
+def test_autopilot_receive_state_expires(net_and_bus):
+    net, mock_bus = net_and_bus
+    frame = net._build_msg("AUTOPILOT", 1)
+    with patch("can_network.network.time.monotonic", return_value=100.0):
+        _recv_one_frame(net, mock_bus, frame)
+        assert net.autopilot_active(timeout=1.5)
+    with patch("can_network.network.time.monotonic", return_value=101.6):
+        assert not net.autopilot_active(timeout=1.5)
+
+
 # ---------------------------------------------------------------------------
 # Lights encoding — individual flags map to individual 1-bit signals
 # ---------------------------------------------------------------------------

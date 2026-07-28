@@ -24,7 +24,7 @@ def test_valid_dbc_loads_successfully(valid_dbc):
     assert isinstance(cycle_times, dict)
     assert set(cycle_times.keys()) == {
         "THROTTLE", "BRAKE", "STEER",
-        "REVERSE", "HAND_BRAKE", "MANUAL_TRANSMISSION", "GEAR",
+        "REVERSE", "HAND_BRAKE", "AUTOPILOT", "MANUAL_TRANSMISSION", "GEAR",
     }
 
 
@@ -36,6 +36,7 @@ def test_cycle_times_converted_from_ms_to_seconds(valid_dbc):
     assert cycle_times["STEER"]               == pytest.approx(0.1)   # 100 ms
     assert cycle_times["REVERSE"]             == pytest.approx(0.2)   # 200 ms
     assert cycle_times["HAND_BRAKE"]          == pytest.approx(0.2)   # 200 ms
+    assert cycle_times["AUTOPILOT"]           == pytest.approx(0.5)   # 500 ms
     assert cycle_times["MANUAL_TRANSMISSION"] == pytest.approx(0.5)   # 500 ms
     assert cycle_times["GEAR"]                == pytest.approx(0.2)   # 200 ms
 

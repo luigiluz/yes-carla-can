@@ -29,6 +29,7 @@ try:
         K_l,
         K_m,
         K_o,
+        K_p,
         K_q,
         K_s,
         K_w,
@@ -64,6 +65,7 @@ class ControlDisplayState:
     throttle: float
     brake: float
     steer: float
+    autopilot_enabled: bool
     hand_brake: bool
     reverse: bool
     manual_gear_shift: bool
@@ -87,6 +89,7 @@ CONTROL_BINDINGS = (
     ControlBinding("A / Left", "Steer left", "Driving", (K_a, K_LEFT), "HOLD"),
     ControlBinding("D / Right", "Steer right", "Driving", (K_d, K_RIGHT), "HOLD"),
     ControlBinding("Space", "Hand brake", "Driving", (K_SPACE,), "HOLD"),
+    ControlBinding("P", "Toggle CAN autopilot", "Driving", (K_p,), "TOGGLE"),
     ControlBinding("Q", "Toggle reverse gear", "Transmission", (K_q,), "TOGGLE", blocked_modifiers=KMOD_CTRL),
     ControlBinding("M", "Toggle manual shifting", "Transmission", (K_m,), "TOGGLE"),
     ControlBinding(",", "Shift down in manual mode", "Transmission", (K_COMMA,), "PRESS"),
@@ -107,6 +110,7 @@ KEY_CAPS = (
     KeyCap("W", (K_w,), 2.0, 1.0),
     KeyCap("I", (K_i,), 8.0, 1.0),
     KeyCap("O", (K_o,), 9.0, 1.0),
+    KeyCap("P", (K_p,), 10.0, 1.0),
     KeyCap("A", (K_a,), 1.5, 2.0),
     KeyCap("S", (K_s,), 2.5, 2.0),
     KeyCap("D", (K_d,), 3.5, 2.0),
@@ -137,6 +141,16 @@ LIGHT_FLAGS = (
     ("Interior", carla.VehicleLightState.Interior),
     ("Special", carla.VehicleLightState.Special1),
 )
+
+ACTUATION_MESSAGES = {
+    "THROTTLE",
+    "BRAKE",
+    "STEER",
+    "REVERSE",
+    "HAND_BRAKE",
+    "MANUAL_TRANSMISSION",
+    "GEAR",
+}
 
 
 class KeyboardSenderControl(object):
@@ -175,10 +189,18 @@ class KeyboardSenderControl(object):
         now = time.time()
         for msg_name, (interval, last_sent) in self._msg_timers.items():
             if now - last_sent >= interval:
+                if self._autopilot_enabled and msg_name in ACTUATION_MESSAGES:
+                    self._msg_timers[msg_name][1] = now
+                    continue
                 method = getattr(self._can_net, MESSAGE_SENDERS[msg_name], None)
                 if method is not None:
                     try:
-                        method(self._control)
+                        value = (
+                            self._autopilot_enabled
+                            if msg_name == "AUTOPILOT"
+                            else self._control
+                        )
+                        method(value)
                     except Exception as e:
                         print(f"[CAN] Failed to send {msg_name}: {e}")
                 else:
@@ -203,6 +225,7 @@ class KeyboardSenderControl(object):
             throttle=float(self._control.throttle),
             brake=float(self._control.brake),
             steer=float(self._control.steer),
+            autopilot_enabled=self._autopilot_enabled,
             hand_brake=bool(self._control.hand_brake),
             reverse=bool(self._control.reverse),
             manual_gear_shift=bool(self._control.manual_gear_shift),
@@ -275,6 +298,16 @@ class KeyboardSenderControl(object):
             elif event.type == pygame.KEYUP:
                 if self._is_quit_shortcut(event.key):
                     return True
+                elif event.key == K_p:
+                    self._autopilot_enabled = not self._autopilot_enabled
+                    can_network.send_autopilot_msg(self._autopilot_enabled)
+                    if not self._autopilot_enabled:
+                        for message_name in ACTUATION_MESSAGES:
+                            if message_name in self._msg_timers:
+                                self._msg_timers[message_name][1] = 0.0
+                    self._record_action(
+                        f"CAN autopilot {'enabled' if self._autopilot_enabled else 'disabled'}"
+                    )
                 elif event.key == K_o:
                     try:
                         can_network.send_switch_door_state_msg()
@@ -701,13 +734,14 @@ def _draw_state(surface, rect, state):
 
     details_x = rect.x + meter_region_width + padding
     details_width = rect.right - padding - details_x
-    detail_height = max(20, int((rect.height - 2 * padding) / 3))
+    detail_height = max(18, int((rect.height - 2 * padding) / 4))
     gear = "R" if state.reverse else ("N" if state.gear == 0 else str(state.gear))
     if len(state.active_lights) > 3:
         lights = ", ".join(state.active_lights[:3]) + f", +{len(state.active_lights) - 3}"
     else:
         lights = ", ".join(state.active_lights) if state.active_lights else "Off"
     detail_lines = (
+        f"CAN autopilot  {'ON' if state.autopilot_enabled else 'OFF'}",
         f"Gear  {gear}    Manual  {'ON' if state.manual_gear_shift else 'OFF'}",
         f"Reverse  {'ON' if state.reverse else 'OFF'}    Hand brake  {'ON' if state.hand_brake else 'OFF'}",
         f"Lights  {lights}",
@@ -717,9 +751,9 @@ def _draw_state(surface, rect, state):
             surface,
             line,
             pygame.Rect(details_x, rect.y + padding + index * detail_height, details_width, detail_height),
-            COLORS["active"] if index == 2 and state.active_lights else COLORS["text"],
+            COLORS["active"] if (index == 0 and state.autopilot_enabled) or (index == 3 and state.active_lights) else COLORS["text"],
             detail_height * 0.52,
-            bold=index < 2,
+            bold=index < 3,
         )
 
 
@@ -729,7 +763,7 @@ def draw_control_interface(surface, controller, pressed, modifiers):
     state = (
         controller.get_display_state()
         if controller is not None
-        else ControlDisplayState(0.0, 0.0, 0.0, False, False, False, 0, ())
+        else ControlDisplayState(0.0, 0.0, 0.0, False, False, False, False, 0, ())
     )
     _draw_header(surface, layout.header, controller, pressed, modifiers)
     _draw_keyboard(surface, layout.keyboard, pressed)

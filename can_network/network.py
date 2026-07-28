@@ -1,11 +1,13 @@
 import can
 import carla
+import time
 
 from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
 
 VCAN_CHANNEL = "vcan0"
 VCAN_ATTACKER_CHANNEL = "vcan1"
 CAN_INTERFACE = "socketcan"
+AUTOPILOT_TIMEOUT = 1.5
 
 
 class CAN_Network(object):
@@ -19,6 +21,8 @@ class CAN_Network(object):
             interface=CAN_INTERFACE, channel=channel, receive_own_messages=True
         )
         self.recvd_controls = carla.VehicleControl()
+        self.autopilot_enabled = False
+        self.last_autopilot_timestamp = None
         self.db, self.cycle_times = load_and_validate(dbc_path)
 
     # ------------------------------------------------------------------
@@ -96,10 +100,8 @@ class CAN_Network(object):
     def send_gear_msg(self, controls):
         self.bus.send(self._build_msg("GEAR", int(controls.gear)))
 
-    def send_autopilot_msg(self, controls):
-        # controls.autopilot is not a standard VehicleControl field;
-        # adapt the value source here if you have an autopilot state elsewhere.
-        pass
+    def send_autopilot_msg(self, enabled):
+        self.bus.send(self._build_msg("AUTOPILOT", int(bool(enabled))))
 
     # ------------------------------------------------------------------
     # Sensor senders
@@ -205,6 +207,10 @@ class CAN_Network(object):
             elif name == "GEAR":
                 self.recvd_controls.gear = int(data[REQUIRED_SIGNALS["GEAR"]])
 
+            elif name == "AUTOPILOT":
+                self.autopilot_enabled = bool(data[REQUIRED_SIGNALS["AUTOPILOT"]])
+                self.last_autopilot_timestamp = time.monotonic()
+
             elif name == "DOORS":
                 if data[REQUIRED_SIGNALS["DOORS"]]:
                     print(data)
@@ -226,3 +232,11 @@ class CAN_Network(object):
                 break
 
         return self.recvd_controls
+
+    def autopilot_active(self, timeout=AUTOPILOT_TIMEOUT):
+        """Return whether the latest AUTOPILOT heartbeat is enabled and fresh."""
+        return (
+            self.autopilot_enabled
+            and self.last_autopilot_timestamp is not None
+            and time.monotonic() - self.last_autopilot_timestamp <= timeout
+        )

@@ -17,6 +17,8 @@ WORKDIR /app
 
 # Use CARLA's official traffic generator instead of maintaining a local spawner.
 COPY --from=carla /home/carla/PythonAPI/examples/generate_traffic.py /app/generate_traffic.py
+# BehaviorAgent provides route planning while all resulting actuation uses CAN.
+COPY --from=carla /home/carla/PythonAPI/carla/agents /app/agents
 
 # Install Python dependencies before copying source to preserve build cache usage.
 COPY requirements.txt .

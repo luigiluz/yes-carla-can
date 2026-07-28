@@ -8,10 +8,11 @@ Tear down the "Yes, CARLA CAN" simulation environment.
 
 What this script does:
   1. Stops the vehicle controls module
-  2. Stops the CARLA client module (waits up to 10 seconds for a clean exit)
-  3. Stops the CARLA simulator
-  4. Removes the vxcan bridge (can-gw routes, vcan1)
-  5. Removes the virtual CAN bus (vcan0) and unloads the vcan/can-gw kernel modules
+  2. Stops the CAN autopilot module
+  3. Stops the CARLA client module (waits up to 10 seconds for a clean exit)
+  4. Stops the CARLA simulator
+  5. Removes the vxcan bridge (can-gw routes, vcan1)
+  6. Removes the virtual CAN bus (vcan0) and unloads the vcan/can-gw kernel modules
 
 Options:
   -h, --help    Show this help message and exit
@@ -35,6 +36,16 @@ if [ -n "$VEHICLE_CONTROLS_PID" ]; then
     echo "vehicle_controls_module (PID $VEHICLE_CONTROLS_PID) stopped."
 else
     echo "vehicle_controls_module process not found."
+fi
+
+# Stop CAN autopilot module
+echo "Stopping CAN autopilot module..."
+AUTOPILOT_PID=$(pgrep -d ' ' -f "autopilot_module.py")
+if [ -n "$AUTOPILOT_PID" ]; then
+    kill $AUTOPILOT_PID
+    echo "autopilot_module (PID $AUTOPILOT_PID) stopped."
+else
+    echo "autopilot_module process not found."
 fi
 
 # Stop CARLA client module and wait for it to exit so sensor streams are

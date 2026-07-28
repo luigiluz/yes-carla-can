@@ -18,6 +18,7 @@ The platform is composed of the following modules:
 - **CAN DBC Network Configuration** — a DBC file (`data/carla.dbc`) that defines the message IDs, signal encoding, and transmission periods for the virtual network. It is the single source of truth for the CAN message schema used across all modules.
 - **CARLA Client Module** (`CARLA_client_module.py`) — connects to the CARLA simulator server, spawns the ego vehicle, and attaches the sensors used in the simulation: collision, GNSS, IMU, lane invasion, and radar.
 - **Vehicle Controls Module** (`vehicle_controls_module.py`) — captures keyboard inputs and translates them into CAN frames according to the DBC schema, publishing them onto `vcan0` to control the simulated vehicle.
+- **Autopilot Module** (`autopilot_module.py`) — runs CARLA's BehaviorAgent for the ego vehicle and publishes every autonomous actuation command through the same CAN messages used for manual control.
 - **Cyberattacks Module** (`cyberattacks_module.py`) — injects malicious CAN frames onto the bus. Supports Denial-of-Service (DoS) flooding and reverse-engineering-based feature spoofing (e.g. forcing hand brake or lights).
 - **Intrusion Detection Module** (`intrusion_detection_module.py`) — listens to `vcan0` in real time and applies statistical detection algorithms to identify anomalous traffic patterns and raise alerts.
 
@@ -45,6 +46,7 @@ yes-carla-can/
 ├── docker-entrypoint.sh           # Sets up vCAN and supervises client processes
 │
 ├── CARLA_client_module.py        # Connects to CARLA, spawns the ego vehicle and sensors
+├── autopilot_module.py           # Publishes BehaviorAgent commands through CAN
 ├── vehicle_controls_module.py    # Translates keyboard input into CAN frames on vcan0
 ├── cyberattacks_module.py        # CLI entry point for injecting attack traffic via vcan1
 ├── intrusion_detection_module.py # CLI entry point for running IDS algorithms on vcan0
@@ -149,7 +151,7 @@ This will:
 1. Create `vcan0` and attacker bus `vcan1` on the host kernel
 2. Bridge the two interfaces with `can-gw` for traffic direction labeling
 3. Launch the CARLA 0.9.15 simulator server with NVIDIA offscreen rendering
-4. Start the CARLA client and vehicle controls modules
+4. Start the CARLA client, CAN autopilot, and vehicle controls modules
 
 After a few seconds, the Pygame windows for the CARLA client and vehicle controls will appear.
 
@@ -174,6 +176,26 @@ After editing the file, restart the client:
 
 ```bash
 docker compose restart client
+```
+
+## CAN-routed autopilot
+
+Press `P` in the **Vehicle Controls** window to enable or disable autopilot. The
+panel sends the `AUTOPILOT` command on CAN ID `0x605`; while enabled, CARLA's
+BehaviorAgent selects destinations and publishes throttle, brake, steering, and
+transmission commands through the normal CAN control frames. The CARLA client
+does not use CARLA's native `set_autopilot()` path.
+
+The mode command is a 500 ms heartbeat. If no fresh enabled frame is received
+for 1.5 seconds, the autonomous producer disengages and sends a safe stop. This
+also makes autonomous driving part of the attack surface. For example:
+
+```bash
+# Continuously force autonomous mode off
+docker compose exec client python cyberattacks_module.py --feature autopilot_off --vcan vcan1
+
+# Spoof the hand brake while autonomous commands are active
+docker compose exec client python cyberattacks_module.py --feature hand_brake --period 0.001 --vcan vcan1
 ```
 
 ## Running experiments
@@ -427,7 +449,8 @@ Internally, `1_up_environment.sh`:
 2. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module.
 3. Waits 5 seconds for CARLA to initialise.
 4. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the vehicle and sensors.
-5. Starts the **vehicle controls module** (`vehicle_controls_module.py`) — translates vehicle state into CAN frames and puts them on `vcan0`.
+5. Starts the **CAN autopilot module** (`autopilot_module.py`) — waits for the mode command and publishes autonomous controls to `vcan0`.
+6. Starts the **vehicle controls module** (`vehicle_controls_module.py`) — translates keyboard input into CAN frames and puts them on `vcan0`.
 
 To confirm the virtual CAN bus is active and producing traffic, run in a separate terminal:
 
@@ -455,7 +478,7 @@ When you are done, tear everything down cleanly:
 ./2_down_environment.sh
 ```
 
-The script stops the vehicle controls module, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, and finally removes `vcan0` and unloads the `vcan` kernel module.
+The script stops the vehicle controls and autopilot modules, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, and finally removes the CAN interfaces and kernel modules.
 
 You should see an output like the following, meaning that the environment was properly brought down:
 
@@ -527,14 +550,14 @@ The output should look like the following:
 ```bash
 CAN network attacks CLI
 usage: cyberattacks_module.py [-h]
-                              [--feature {hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}]
+                              [--feature {autopilot_on,autopilot_off,hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}]
                               [--period PERIOD]
 
 Perform CAN network attacks.
 
 optional arguments:
   -h, --help            show this help message and exit
-  --feature {hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}
+  --feature {autopilot_on,autopilot_off,hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}
                         Feature to attack
   --period PERIOD       Period between messages in seconds
 ```

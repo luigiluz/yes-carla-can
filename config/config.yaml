@@ -2,9 +2,9 @@ map: Town10HD
 vehicle: vehicle.nissan.patrol_2021
 
 traffic:
-  enabled: true
+  enabled: false
   cars: 20
 
 pedestrians:
-  enabled: true
+  enabled: false
   count: 10

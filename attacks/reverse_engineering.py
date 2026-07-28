@@ -1,4 +1,12 @@
 FEATURE_CAN_ID_PAYLOAD_MAPPER = {
+    "autopilot_on": {
+        "id": 0x605,
+        "payload": [0x01, 0x00, 0x00, 0x00]
+    },
+    "autopilot_off": {
+        "id": 0x605,
+        "payload": [0x00, 0x00, 0x00, 0x00]
+    },
     "hand_brake": {
         "id": 0x604,
         "payload": [0x01]
