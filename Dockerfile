@@ -1,3 +1,5 @@
+FROM carlasim/carla:0.9.15 AS carla
+
 FROM python:3.9-slim
 
 # SocketCAN tools, tkinter, and fonts used by the client GUIs.
@@ -12,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Use CARLA's official traffic generator instead of maintaining a local spawner.
+COPY --from=carla /home/carla/PythonAPI/examples/generate_traffic.py /app/generate_traffic.py
 
 # Install Python dependencies before copying source to preserve build cache usage.
 COPY requirements.txt .

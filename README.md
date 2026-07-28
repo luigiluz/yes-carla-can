@@ -161,10 +161,16 @@ Choose the CARLA map and exact vehicle blueprint in
 ```yaml
 map: Town01
 vehicle: vehicle.tesla.model3
-```
 
-The client loads the complete map normally and spawns the configured vehicle. No
-map-layer configuration is applied. After editing the file, restart the client:
+traffic:
+  enabled: false
+  cars: 20
+
+pedestrians:
+  enabled: false
+  count: 20
+```
+After editing the file, restart the client:
 
 ```bash
 docker compose restart client

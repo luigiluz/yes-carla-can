@@ -1,2 +1,10 @@
 map: Town10HD
-vehicle: vehicle.tesla.model3
+vehicle: vehicle.nissan.patrol_2021
+
+traffic:
+  enabled: true
+  cars: 20
+
+pedestrians:
+  enabled: true
+  count: 10

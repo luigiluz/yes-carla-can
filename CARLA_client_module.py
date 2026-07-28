@@ -14,6 +14,7 @@ import logging
 import os
 from pathlib import Path
 import signal
+import subprocess
 import sys
 
 try:
@@ -40,7 +41,8 @@ from can_network.network import CAN_Network, VCAN_CHANNEL
 from gui import CANTrafficDisplay, HUD, KeyboardControl, World
 
 
-CONFIG_PATH = Path(__file__).parent / "config" / "config.yaml"
+PROJECT_DIR = Path(__file__).parent
+CONFIG_PATH = PROJECT_DIR / "config" / "config.yaml"
 
 
 def load_config(path=CONFIG_PATH):
@@ -50,9 +52,11 @@ def load_config(path=CONFIG_PATH):
     except (OSError, yaml.YAMLError) as error:
         raise ValueError(f"Could not load config/config.yaml: {error}") from None
 
-    if not isinstance(config, dict) or set(config) != {"map", "vehicle"}:
+    expected_fields = {"map", "vehicle", "traffic", "pedestrians"}
+    if not isinstance(config, dict) or set(config) != expected_fields:
         raise ValueError(
-            "config/config.yaml must contain exactly 'map' and 'vehicle'."
+            "config/config.yaml must contain exactly 'map', 'vehicle', "
+            "'traffic', and 'pedestrians'."
         )
 
     map_name = config["map"]
@@ -69,10 +73,67 @@ def load_config(path=CONFIG_PATH):
             "The config/config.yaml 'vehicle' value must be an exact vehicle blueprint."
         )
 
-    return map_name.strip(), vehicle_blueprint.strip()
+
+    config["map"] = map_name.strip()
+    config["vehicle"] = vehicle_blueprint.strip()
+    return config
+
+def start_traffic(args, config):
+    cars = config["traffic"]["cars"] if config["traffic"]["enabled"] else 0
+    pedestrians = (
+        config["pedestrians"]["count"]
+        if config["pedestrians"]["enabled"]
+        else 0
+    )
+    if cars == 0 and pedestrians == 0:
+        return None
+
+    traffic_script = PROJECT_DIR / "generate_traffic.py"
+    if not traffic_script.exists():
+        carla_dir = os.environ.get("CARLA_FOLDER_NAME", "carla-0-9-15")
+        traffic_script = (
+            PROJECT_DIR / carla_dir / "PythonAPI" / "examples" / "generate_traffic.py"
+        )
+    if not traffic_script.exists():
+        raise ValueError("CARLA's generate_traffic.py script was not found.")
+
+    command = [
+        sys.executable,
+        "-u",
+        str(traffic_script),
+        "--host",
+        args.host,
+        "--port",
+        str(args.port),
+        "--number-of-vehicles",
+        str(cars),
+        "--number-of-walkers",
+        str(pedestrians),
+        "--safe",
+    ]
+    if not args.sync:
+        command.append("--asynch")
+
+    logging.info(
+        "starting CARLA traffic generator: cars=%d pedestrians=%d",
+        cars,
+        pedestrians,
+    )
+    return subprocess.Popen(command)
 
 
-def game_loop(args, map_name, vehicle_blueprint):
+def stop_traffic(process):
+    if process is None or process.poll() is not None:
+        return
+    process.send_signal(signal.SIGINT)
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        process.wait(timeout=5)
+
+
+def game_loop(args, config):
     pygame.init()
     pygame.font.init()
 
@@ -83,6 +144,7 @@ def game_loop(args, map_name, vehicle_blueprint):
     print(f"width: {width}, height: {height}")
 
     world = None
+    traffic_process = None
     original_settings = None
     can_bus = CAN_Network(channel=args.vcan)
     can_display = CANTrafficDisplay(channel=args.vcan)
@@ -91,8 +153,8 @@ def game_loop(args, map_name, vehicle_blueprint):
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
 
-        logging.info("loading map %s", map_name)
-        sim_world = client.load_world(map_name)
+        logging.info("loading map %s", config["map"])
+        sim_world = client.load_world(config["map"])
 
         # Disable rendering and set fixed time step
         world_settings = sim_world.get_settings()
@@ -125,8 +187,10 @@ def game_loop(args, map_name, vehicle_blueprint):
         pygame.display.flip()
 
         hud = HUD(width / 2, height / 2)
-        world = World(sim_world, hud, args, can_bus, vehicle_blueprint)
-        logging.info("spawned vehicle %s", vehicle_blueprint)
+        world = World(sim_world, hud, args, can_bus, config["vehicle"])
+        logging.info("spawned vehicle %s", config["vehicle"])
+
+        traffic_process = start_traffic(args, config)
         controller = KeyboardControl(world, args.autopilot)
 
         if args.sync:
@@ -147,6 +211,8 @@ def game_loop(args, map_name, vehicle_blueprint):
             pygame.display.flip()
 
     finally:
+        stop_traffic(traffic_process)
+
         # Stop CARLA sensor streams first so the server can close sessions cleanly
         # before any other teardown that might talk to the server or tear down the
         # CAN interface.
@@ -239,8 +305,8 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
     try:
-        map_name, vehicle_blueprint = load_config()
-        game_loop(args, map_name, vehicle_blueprint)
+        config = load_config()
+        game_loop(args, config)
     except ValueError as error:
         logging.error("%s", error)
         raise SystemExit(2) from None
