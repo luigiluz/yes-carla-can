@@ -34,17 +34,17 @@ def test_socketcan_ignores_serial_and_bitrate(monkeypatch):
     assert "bitrate" not in kwargs
 
 
-def test_ics_neovi_picks_up_serial_and_bitrate_from_env(monkeypatch):
+def test_neovi_picks_up_serial_and_bitrate_from_env(monkeypatch):
     bc = reload_with_env(
         monkeypatch,
-        CAN_INTERFACE="ics_neovi",
+        CAN_INTERFACE="neovi",
         CAN_CHANNEL="HSCAN",
         CAN_SERIAL="ABC123",
         CAN_BITRATE="500000",
     )
     kwargs = bc.bus_kwargs()
     assert kwargs == {
-        "interface": "ics_neovi",
+        "interface": "neovi",
         "channel": "HSCAN",
         "receive_own_messages": True,
         "serial": "ABC123",
@@ -53,14 +53,14 @@ def test_ics_neovi_picks_up_serial_and_bitrate_from_env(monkeypatch):
 
 
 def test_explicit_serial_wins_over_env_serial(monkeypatch):
-    bc = reload_with_env(monkeypatch, CAN_INTERFACE="ics_neovi", CAN_SERIAL="ENV_SERIAL")
+    bc = reload_with_env(monkeypatch, CAN_INTERFACE="neovi", CAN_SERIAL="ENV_SERIAL")
     kwargs = bc.bus_kwargs("HSCAN", serial="EXPLICIT_SERIAL")
     assert kwargs["serial"] == "EXPLICIT_SERIAL"
 
 
 def test_two_devices_get_independent_kwargs(monkeypatch):
     """The two-Intrepid-device scenario: each script's serial/channel stay independent."""
-    bc = reload_with_env(monkeypatch, CAN_INTERFACE="ics_neovi")
+    bc = reload_with_env(monkeypatch, CAN_INTERFACE="neovi")
     client_kwargs = bc.bus_kwargs("HSCAN", serial="CLIENT_SN")
     controls_kwargs = bc.bus_kwargs("HSCAN2", serial="CONTROLS_SN")
     assert client_kwargs["serial"] == "CLIENT_SN"

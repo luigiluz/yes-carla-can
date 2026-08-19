@@ -132,7 +132,7 @@ if [[ "${CAN_MODE}" == "virtual" ]]; then
     CONTROLS_ARGS+=(--vcan "${VCAN_INTERFACE}")
 else
     echo "Physical CAN mode: skipping vcan/can-gw setup."
-    export CAN_INTERFACE="ics_neovi"
+    export CAN_INTERFACE="neovi"
     [[ -n "${CAN_BITRATE}" ]] && export CAN_BITRATE
     CLIENT_ARGS+=(--vcan "${CLIENT_CAN_CHANNEL}" --can-serial "${CLIENT_CAN_SERIAL}")
     CONTROLS_ARGS+=(--vcan "${CONTROLS_CAN_CHANNEL}" --can-serial "${CONTROLS_CAN_SERIAL}")

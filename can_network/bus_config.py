@@ -12,7 +12,7 @@ def bus_kwargs(channel=None, serial=None, **overrides):
         "channel": channel or VCAN_CHANNEL,
         "receive_own_messages": True,
     }
-    if CAN_INTERFACE == "ics_neovi":
+    if CAN_INTERFACE == "neovi":
         serial = serial or os.environ.get("CAN_SERIAL")
         if serial:
             kwargs["serial"] = serial
