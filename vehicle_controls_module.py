@@ -371,6 +371,9 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None, can_seria
 
     while running:
         clock.tick_busy_loop(60)
+        # Drain the bus's RX/echo queue even though we don't act on it here — on the
+        # physical (Intrepid) backend, letting it go unread stalls sends after a while.
+        can_net.recv_msg()
         if controller.parse_events(clock, can_net):
             running = False
             break

@@ -87,6 +87,13 @@ if [[ "${CAN_MODE}" == "physical" ]]; then
         echo "(each node script opens its own device; the serial can't be guessed with more than one attached)"
         exit 1
     fi
+    if [[ -z "${CAN_BITRATE}" ]]; then
+        echo "WARNING: --can-mode physical without --can-bitrate relies on auto-bitrate"
+        echo "detection, which needs to observe existing traffic to lock onto a rate and"
+        echo "can fail to lock (frames then hang trying to transmit) on a quiet bus. Pass"
+        echo "--can-bitrate explicitly (e.g. 500000 for a typical vehicle HS-CAN bus) if"
+        echo "sends hang or devices fail to come up."
+    fi
 fi
 
 # On hybrid Intel/NVIDIA systems, Vulkan may default to the Intel GPU and cause

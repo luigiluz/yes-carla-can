@@ -1,8 +1,12 @@
+import time
+
 import can
 import carla
 
 from can_network.bus_config import VCAN_CHANNEL, bus_kwargs
 from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
+
+SLOW_SEND_WARN_MS = 50
 
 
 class CAN_Network(object):
@@ -13,12 +17,23 @@ class CAN_Network(object):
 
     def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL, serial=None):
         self.bus = can.ThreadSafeBus(**bus_kwargs(channel, serial=serial))
+        print(f"[CAN] Bus opened: {self.bus.channel_info}")
         self.recvd_controls = carla.VehicleControl()
         self.db, self.cycle_times = load_and_validate(dbc_path)
 
     # ------------------------------------------------------------------
     # Internal helper
     # ------------------------------------------------------------------
+
+    def _send(self, msg, label):
+        # timeout=0 is required, not cosmetic: NeoViBus repurposes `timeout` for a
+        # device-ACK-wait, and treats the generic BusABC default (None) as "wait
+        # forever" — socketcan treats None/0 identically, so this is a no-op there.
+        start = time.monotonic()
+        self.bus.send(msg, timeout=0)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        if elapsed_ms > SLOW_SEND_WARN_MS:
+            print(f"[CAN] WARNING: {label} send took {elapsed_ms:.0f}ms (id=0x{msg.arbitration_id:X})")
 
     def _build_msg(self, message_name, value) -> can.Message:
         """Encode a single-signal CAN message from the DBC and return a can.Message ready to send."""
@@ -58,38 +73,38 @@ class CAN_Network(object):
     # ------------------------------------------------------------------
 
     def send_switch_door_state_msg(self):
-        self.bus.send(self._build_msg("DOORS", True))
+        self._send(self._build_msg("DOORS", True), "DOORS")
 
     def send_current_lights_msg(self, lights):
         dbc_msg = self.db.get_message_by_name("GENERAL_LIGHTS")
         lights_int = int(lights)
         signal_dict = {sig: int(bool(lights_int & flag)) for sig, flag in LIGHT_SIGNALS.items()}
-        self.bus.send(can.Message(
+        self._send(can.Message(
             arbitration_id=dbc_msg.frame_id,
             data=dbc_msg.encode(signal_dict),
             is_extended_id=dbc_msg.is_extended_frame,
-        ))
+        ), "GENERAL_LIGHTS")
 
     def send_throttle_msg(self, controls):
-        self.bus.send(self._build_msg("THROTTLE", int(controls.throttle * 255)))
+        self._send(self._build_msg("THROTTLE", int(controls.throttle * 255)), "THROTTLE")
 
     def send_steer_msg(self, controls):
-        self.bus.send(self._build_msg("STEER", int((controls.steer + 1) / 2 * 255)))
+        self._send(self._build_msg("STEER", int((controls.steer + 1) / 2 * 255)), "STEER")
 
     def send_brake_msg(self, controls):
-        self.bus.send(self._build_msg("BRAKE", int(controls.brake * 255)))
+        self._send(self._build_msg("BRAKE", int(controls.brake * 255)), "BRAKE")
 
     def send_hand_brake_msg(self, controls):
-        self.bus.send(self._build_msg("HAND_BRAKE", int(controls.hand_brake)))
+        self._send(self._build_msg("HAND_BRAKE", int(controls.hand_brake)), "HAND_BRAKE")
 
     def send_reverse_msg(self, controls):
-        self.bus.send(self._build_msg("REVERSE", int(controls.reverse)))
+        self._send(self._build_msg("REVERSE", int(controls.reverse)), "REVERSE")
 
     def send_manual_transmission_msg(self, controls):
-        self.bus.send(self._build_msg("MANUAL_TRANSMISSION", int(controls.manual_gear_shift)))
+        self._send(self._build_msg("MANUAL_TRANSMISSION", int(controls.manual_gear_shift)), "MANUAL_TRANSMISSION")
 
     def send_gear_msg(self, controls):
-        self.bus.send(self._build_msg("GEAR", int(controls.gear)))
+        self._send(self._build_msg("GEAR", int(controls.gear)), "GEAR")
 
     def send_autopilot_msg(self, controls):
         # controls.autopilot is not a standard VehicleControl field;
@@ -101,47 +116,47 @@ class CAN_Network(object):
     # ------------------------------------------------------------------
 
     def send_gnss_msg(self, lat, lon):
-        self.bus.send(self._build_sensor_msg("GNSS", {
+        self._send(self._build_sensor_msg("GNSS", {
             "GNSS_LAT_signal": lat,
             "GNSS_LON_signal": lon,
-        }))
+        }), "GNSS")
 
     def send_collision_msg(self, intensity):
-        self.bus.send(self._build_sensor_msg("COLLISION", {
+        self._send(self._build_sensor_msg("COLLISION", {
             "COLLISION_INTENSITY_signal": min(intensity, 6553.5),
-        }))
+        }), "COLLISION")
 
     def send_lane_invasion_msg(self, bitmask):
-        self.bus.send(self._build_sensor_msg("LANE_INVASION", {
+        self._send(self._build_sensor_msg("LANE_INVASION", {
             "LANE_INVASION_TYPE_signal": bitmask,
-        }))
+        }), "LANE_INVASION")
 
     def send_imu_accel_msg(self, x, y, z):
-        self.bus.send(self._build_sensor_msg("IMU_ACCEL", {
+        self._send(self._build_sensor_msg("IMU_ACCEL", {
             "IMU_ACCEL_X_signal": x,
             "IMU_ACCEL_Y_signal": y,
             "IMU_ACCEL_Z_signal": z,
-        }))
+        }), "IMU_ACCEL")
 
     def send_imu_gyro_msg(self, x, y, z):
-        self.bus.send(self._build_sensor_msg("IMU_GYRO", {
+        self._send(self._build_sensor_msg("IMU_GYRO", {
             "IMU_GYRO_X_signal": x,
             "IMU_GYRO_Y_signal": y,
             "IMU_GYRO_Z_signal": z,
-        }))
+        }), "IMU_GYRO")
 
     def send_imu_compass_msg(self, compass):
-        self.bus.send(self._build_sensor_msg("IMU_COMPASS", {
+        self._send(self._build_sensor_msg("IMU_COMPASS", {
             "IMU_COMPASS_signal": compass,
-        }))
+        }), "IMU_COMPASS")
 
     def send_radar_target_msg(self, velocity, azimuth, altitude, depth):
-        self.bus.send(self._build_sensor_msg("RADAR_TARGET", {
+        self._send(self._build_sensor_msg("RADAR_TARGET", {
             "RADAR_VEL_signal":   velocity,
             "RADAR_AZI_signal":   azimuth,
             "RADAR_ALT_signal":   altitude,
             "RADAR_DEPTH_signal": depth,
-        }))
+        }), "RADAR_TARGET")
 
     def send_msg(self, controls):
         """Convenience method — sends all messages at once (bypasses per-message timing)."""
