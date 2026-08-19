@@ -5,7 +5,7 @@ import time
 import random
 
 from attacks.reverse_engineering import FEATURE_CAN_ID_PAYLOAD_MAPPER
-from can_network import VCAN_ATTACKER_CHANNEL, CAN_INTERFACE
+from can_network import VCAN_ATTACKER_CHANNEL, bus_kwargs
 
 # ---------------------------------------------------------------------------
 # Live status display
@@ -112,7 +112,7 @@ def main():
         return
     if args.feature not in available_features:
         print(f"Feature '{args.feature}' is not available. Choose from {available_features}.")
-    bus = can.interface.Bus(channel=args.vcan, interface=CAN_INTERFACE)
+    bus = can.interface.Bus(**bus_kwargs(args.vcan))
 
     try:
         if args.feature == "fuzzy":

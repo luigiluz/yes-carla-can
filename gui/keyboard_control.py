@@ -1,7 +1,5 @@
 import carla
 
-from can_network.network import CAN_Network
-
 try:
     import pygame
     from pygame.locals import (
@@ -46,7 +44,6 @@ class KeyboardControl(object):
     """Class that handles keyboard input."""
 
     def __init__(self, world, start_in_autopilot):
-        self._can = CAN_Network()
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1

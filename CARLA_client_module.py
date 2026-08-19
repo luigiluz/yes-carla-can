@@ -50,8 +50,8 @@ def game_loop(args):
 
     world = None
     original_settings = None
-    can_bus = CAN_Network(channel=args.vcan)
-    can_display = CANTrafficDisplay(channel=args.vcan)
+    can_bus = CAN_Network(channel=args.vcan, serial=args.can_serial)
+    can_display = CANTrafficDisplay(channel=args.vcan, serial=args.can_serial)
 
     try:
         client = carla.Client(args.host, args.port)
@@ -60,7 +60,7 @@ def game_loop(args):
         # Disable rendering and set fixed time step
         sim_world = client.get_world()
         world_settings = sim_world.get_settings()
-        world_settings.no_rendering_mode = True  # Disable rendering
+        world_settings.no_rendering_mode = False  # Disable rendering
         # fps = 30
         # world_settings.fixed_delta_seconds = round(1/fps, 2) # Set FPS
         sim_world.apply_settings(world_settings)
@@ -83,12 +83,12 @@ def game_loop(args):
             )
 
         display = pygame.display.set_mode(
-            (width / 2, height / 2), pygame.HWSURFACE | pygame.DOUBLEBUF
+            (width // 2, height // 2), pygame.HWSURFACE | pygame.DOUBLEBUF
         )
         display.fill((0, 0, 0))
         pygame.display.flip()
 
-        hud = HUD(width / 2, height / 2)
+        hud = HUD(width // 2, height // 2)
         world = World(sim_world, hud, args, can_bus)
         controller = KeyboardControl(world, args.autopilot)
 
@@ -199,7 +199,13 @@ def main():
     argparser.add_argument(
         "--vcan",
         default=VCAN_CHANNEL,
-        help=f"Virtual CAN interface name (default: {VCAN_CHANNEL})",
+        help=f"CAN channel/interface name, virtual or physical (default: {VCAN_CHANNEL})",
+    )
+    argparser.add_argument(
+        "--can-serial",
+        default=None,
+        help="Serial number of the physical CAN device to use (physical mode only; "
+        "defaults to the CAN_SERIAL env var, then auto-detect)",
     )
     args = argparser.parse_args()
 

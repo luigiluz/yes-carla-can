@@ -3,7 +3,7 @@ import can
 from pathlib import Path
 from defense.id_time_intrusion_detection import IdTimeIntrusionDetection
 from defense.ids_training.ml_intrusion_detection import MlIntrusionDetection
-from can_network import VCAN_CHANNEL, CAN_INTERFACE
+from can_network import bus_kwargs
 
 DETECTOR_FACTORY = {
     "id_time": IdTimeIntrusionDetection,
@@ -31,7 +31,7 @@ def main():
     selected_detector = DETECTOR_FACTORY[args.detector]()
     model_path = args.ml_model if args.detector == "ml" else args.id_time_statistics
     selected_detector.load(model_path)
-    bus = can.interface.Bus(channel=VCAN_CHANNEL, interface=CAN_INTERFACE)
+    bus = can.interface.Bus(**bus_kwargs())
 
     try:
         while True:

@@ -1,23 +1,18 @@
 import can
 import carla
 
+from can_network.bus_config import VCAN_CHANNEL, bus_kwargs
 from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
-
-VCAN_CHANNEL = "vcan0"
-VCAN_ATTACKER_CHANNEL = "vcan1"
-CAN_INTERFACE = "socketcan"
 
 
 class CAN_Network(object):
-    """Interface to the virtual CAN bus backed by a DBC message schema."""
+    """Interface to the CAN bus (virtual or physical) backed by a DBC message schema."""
 
     door_change_state = False
     current_lights = carla.VehicleLightState.NONE
 
-    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL):
-        self.bus = can.ThreadSafeBus(
-            interface=CAN_INTERFACE, channel=channel, receive_own_messages=True
-        )
+    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL, serial=None):
+        self.bus = can.ThreadSafeBus(**bus_kwargs(channel, serial=serial))
         self.recvd_controls = carla.VehicleControl()
         self.db, self.cycle_times = load_and_validate(dbc_path)
 

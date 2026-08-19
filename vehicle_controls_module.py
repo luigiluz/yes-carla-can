@@ -213,7 +213,7 @@ class KeyboardSenderControl(object):
         return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 
-def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
+def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None, can_serial=None):
     print("Starting keyboard parser loop")
     pygame.init()
     pygame.font.init()
@@ -361,7 +361,7 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
     # Flush the initial drawing to screen before any potentially-blocking CAN init
     pygame.display.flip()
 
-    can_net = can_network.CAN_Network(dbc_path=dbc_path, channel=vcan_channel)
+    can_net = can_network.CAN_Network(dbc_path=dbc_path, channel=vcan_channel, serial=can_serial)
     controller = KeyboardSenderControl(can_net)
     scheduled = [f"{name}({int(iv[0] * 1000)}ms)" for name, iv in sorted(controller._msg_timers.items())]
     print(f"[CAN] DBC loaded: {dbc_path}")
@@ -437,7 +437,13 @@ def main():
     parser.add_argument(
         "--vcan",
         default=VCAN_CHANNEL,
-        help=f"Virtual CAN interface name (default: {VCAN_CHANNEL})",
+        help=f"CAN channel/interface name, virtual or physical (default: {VCAN_CHANNEL})",
+    )
+    parser.add_argument(
+        "--can-serial",
+        default=None,
+        help="Serial number of the physical CAN device to use (physical mode only; "
+        "defaults to the CAN_SERIAL env var, then auto-detect)",
     )
     args = parser.parse_args()
 
@@ -447,7 +453,7 @@ def main():
     print("Sending commands through CAN bus")
     print_key_bindings()
     try:
-        keyboard_parser_loop(dbc_path=args.dbc, vcan_channel=args.vcan)
+        keyboard_parser_loop(dbc_path=args.dbc, vcan_channel=args.vcan, can_serial=args.can_serial)
     except (KeyboardInterrupt, SystemExit):
         print("\nCancelled by user. Bye!")
         pygame.quit()

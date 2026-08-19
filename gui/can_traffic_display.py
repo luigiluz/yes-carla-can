@@ -5,7 +5,7 @@ from collections import deque
 import can
 import pygame
 
-from can_network.network import VCAN_CHANNEL, CAN_INTERFACE
+from can_network.bus_config import VCAN_CHANNEL, bus_kwargs
 
 
 class CANTrafficDisplay:
@@ -24,7 +24,7 @@ class CANTrafficDisplay:
     COLOR_TEXT = (160, 255, 160)
     COLOR_DIVIDER = (0, 180, 80)
 
-    def __init__(self, channel: str = VCAN_CHANNEL, max_messages: int = 30):
+    def __init__(self, channel: str = VCAN_CHANNEL, serial: str = None, max_messages: int = 30):
         self._messages: deque[str] = deque(maxlen=max_messages)
         self._lock = threading.Lock()
         self._active = False
@@ -32,7 +32,7 @@ class CANTrafficDisplay:
         self._bus = None
 
         try:
-            self._bus = can.Bus(interface=CAN_INTERFACE, channel=channel)
+            self._bus = can.Bus(**bus_kwargs(channel, serial=serial))
             self._active = True
         except Exception as exc:
             print(f"[CANTrafficDisplay] Could not open {channel}: {exc}")
