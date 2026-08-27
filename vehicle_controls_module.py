@@ -364,12 +364,8 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", powertrain_channel=None, com
     # Flush the initial drawing to screen before any potentially-blocking CAN init
     pygame.display.flip()
 
-    powertrain_ecu = can_network.CAN_Network(
-        dbc_path=dbc_path, channel=powertrain_channel, serial=can_serial, ecu_bus="POWERTRAIN"
-    )
-    comfort_ecu = can_network.CAN_Network(
-        dbc_path=dbc_path, channel=comfort_channel, serial=can_serial, ecu_bus="COMFORT"
-    )
+    bundle = can_network.open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=can_serial)
+    powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
     controller = KeyboardSenderControl(powertrain_ecu, comfort_ecu)
     scheduled = [f"{name}({int(iv[0] * 1000)}ms)" for name, iv in sorted(controller._msg_timers.items())]
     print(f"[CAN] DBC loaded: {dbc_path}")
@@ -379,10 +375,9 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", powertrain_channel=None, com
 
     while running:
         clock.tick_busy_loop(60)
-        # Drain each bus's RX/echo queue even though we don't act on it here — on the
+        # Drain the bus's RX/echo queue even though we don't act on it here — on the
         # physical (Intrepid) backend, letting it go unread stalls sends after a while.
-        powertrain_ecu.recv_msg()
-        comfort_ecu.recv_msg()
+        bundle.poll()
         if controller.parse_events(clock):
             running = False
             break

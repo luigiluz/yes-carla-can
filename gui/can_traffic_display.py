@@ -23,13 +23,23 @@ class CANTrafficDisplay:
     COLOR_TEXT = (160, 255, 160)
     COLOR_DIVIDER = (0, 180, 80)
 
-    def __init__(self, channel: str = VCAN_CHANNEL, serial: str = None, max_messages: int = 30):
+    def __init__(self, channel: str = VCAN_CHANNEL, serial: str = None, max_messages: int = 30,
+                 passive: bool = False):
+        """passive=True: don't open a bus/thread of our own — the caller feeds frames via
+        feed(), e.g. a SharedPhysicalBus that already owns the one allowed handle to this
+        physical device. Used on the neovi backend, where opening yet another handle to
+        the same device would fail."""
         self._messages: deque[str] = deque(maxlen=max_messages)
         self._lock = threading.Lock()
         self._active = False
         self._font = None
         self._bus = None
+        self._passive = passive
         self._header = f"CAN Traffic  ({channel})"
+
+        if passive:
+            self._active = True
+            return
 
         try:
             self._bus = can.Bus(**bus_kwargs(channel, serial=serial))
@@ -41,19 +51,24 @@ class CANTrafficDisplay:
         self._thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._thread.start()
 
+    def _format_line(self, msg):
+        ts = datetime.datetime.fromtimestamp(msg.timestamp).strftime("%H:%M:%S.%f")[:-3]
+        data_str = " ".join(f"{b:02X}" for b in msg.data)
+        return f"{ts}  {msg.arbitration_id:03X}  [{msg.dlc}]  {data_str}"
+
+    def feed(self, msg):
+        """Passive mode: called by whoever owns the shared bus for each frame on our channel."""
+        with self._lock:
+            self._messages.append(self._format_line(msg))
+
     def _recv_loop(self):
         while self._active:
             try:
                 msg = self._bus.recv(timeout=1.0)
                 if msg is None:
                     continue
-                ts = datetime.datetime.fromtimestamp(msg.timestamp).strftime(
-                    "%H:%M:%S.%f"
-                )[:-3]
-                data_str = " ".join(f"{b:02X}" for b in msg.data)
-                line = f"{ts}  {msg.arbitration_id:03X}  [{msg.dlc}]  {data_str}"
                 with self._lock:
-                    self._messages.append(line)
+                    self._messages.append(self._format_line(msg))
             except can.CanOperationError:
                 self._active = False
                 break
@@ -81,6 +96,8 @@ class CANTrafficDisplay:
     # ------------------------------------------------------------------
 
     def stop(self):
+        if self._passive:
+            return
         self._active = False
         if self._bus:
             self._bus.shutdown()

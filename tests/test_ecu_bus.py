@@ -52,3 +52,49 @@ def test_unscoped_network_keeps_todays_unfiltered_behavior(sensor_dbc_path):
     assert "THROTTLE" in net.cycle_times
     net.send_throttle_msg(SimpleNamespace(throttle=0.5))  # does not raise
     net.send_gnss_msg(1.0, 2.0)  # does not raise
+
+
+# ---------------------------------------------------------------------------
+# Shared physical bus (neovi double-open fix)
+# ---------------------------------------------------------------------------
+
+
+def test_ecu_on_shared_bus_tags_outgoing_channel(sensor_dbc_path):
+    mock_bus = MagicMock()
+    ecu = CAN_Network(dbc_path=str(sensor_dbc_path), ecu_bus="POWERTRAIN", bus=mock_bus, send_channel=7)
+    ecu.send_throttle_msg(SimpleNamespace(throttle=0.5))
+    sent_msg = mock_bus.send.call_args[0][0]
+    assert sent_msg.channel == 7
+
+
+def test_ecu_on_shared_bus_does_not_drain_on_recv_msg(sensor_dbc_path):
+    mock_bus = MagicMock()
+    ecu = CAN_Network(dbc_path=str(sensor_dbc_path), ecu_bus="POWERTRAIN", bus=mock_bus, send_channel=7)
+    ecu.recv_msg()
+    mock_bus.recv.assert_not_called()
+
+
+def test_shared_physical_bus_dispatches_by_channel(sensor_dbc_path):
+    from can_network.network import SharedPhysicalBus
+
+    with patch("can.ThreadSafeBus", return_value=MagicMock()), \
+         patch(
+             "can.interfaces.ics_neovi.neovi_bus.NeoViBus.channel_to_netid",
+             side_effect=lambda c: {"HSCAN": 1, "HSCAN2": 42}[c],
+         ):
+        shared = SharedPhysicalBus("HSCAN", "HSCAN2", serial="V2C301")
+
+    assert shared.powertrain_netid == 1
+    assert shared.comfort_netid == 42
+
+    calls = []
+    shared.add_consumer(1, lambda m: calls.append(("powertrain", m)))
+    shared.add_consumer(42, lambda m: calls.append(("comfort", m)))
+
+    frame_pt = SimpleNamespace(channel=1)
+    frame_cf = SimpleNamespace(channel=42)
+    shared.bus.recv.side_effect = [frame_pt, frame_cf, None]
+
+    shared.poll()
+
+    assert calls == [("powertrain", frame_pt), ("comfort", frame_cf)]

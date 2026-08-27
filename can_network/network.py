@@ -27,9 +27,20 @@ class CAN_Network(object):
     Leave it None (default) for the unscoped, single-bus behavior.
     """
 
-    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL, serial=None, ecu_bus=None):
-        self.bus = can.ThreadSafeBus(**bus_kwargs(channel, serial=serial))
-        print(f"[CAN] Bus opened: {self.bus.channel_info}")
+    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL, serial=None, ecu_bus=None,
+                 bus=None, send_channel=None):
+        if bus is not None:
+            # Attach to an already-open bus (e.g. a SharedPhysicalBus) instead of opening
+            # our own — required on the neovi backend, where a physical device can only be
+            # opened once per process. recv_msg() becomes a no-op in this mode; draining
+            # happens centrally via whatever owns the shared bus (see SharedPhysicalBus).
+            self.bus = bus
+            self._owns_bus = False
+        else:
+            self.bus = can.ThreadSafeBus(**bus_kwargs(channel, serial=serial))
+            print(f"[CAN] Bus opened: {self.bus.channel_info}")
+            self._owns_bus = True
+        self._send_channel = send_channel
         self.recvd_controls = carla.VehicleControl()
         self.door_change_state = False
         self.current_lights = carla.VehicleLightState.NONE
@@ -53,6 +64,8 @@ class CAN_Network(object):
         # timeout=0 is required, not cosmetic: NeoViBus repurposes `timeout` for a
         # device-ACK-wait, and treats the generic BusABC default (None) as "wait
         # forever" — socketcan treats None/0 identically, so this is a no-op there.
+        if self._send_channel is not None:
+            msg.channel = self._send_channel
         start = time.monotonic()
         self.bus.send(msg, timeout=0)
         elapsed_ms = (time.monotonic() - start) * 1000
@@ -210,70 +223,114 @@ class CAN_Network(object):
         self.door_change_state = not self.door_change_state
         return self.door_change_state
 
+    def _apply_frame(self, recv_msg):
+        """Decode one raw can.Message and, if it's on this ECU's bus, apply it to
+        recvd_controls/door_change_state/current_lights. Messages on another bus are
+        silently skipped (see the ecu_bus filter in __init__)."""
+        try:
+            dbc_msg = self.db.get_message_by_frame_id(recv_msg.arbitration_id)
+        except KeyError:
+            print(f"[CAN] INFO: Received unknown arbitration_id 0x{recv_msg.arbitration_id:X}, skipping")
+            return
+
+        name = dbc_msg.name
+        if name not in self.messages:
+            return
+
+        data = self.db.decode_message(recv_msg.arbitration_id, recv_msg.data)
+
+        if name == "THROTTLE":
+            self.recvd_controls.throttle = data[REQUIRED_SIGNALS["THROTTLE"]] / 255.0
+
+        elif name == "STEER":
+            self.recvd_controls.steer = (data[REQUIRED_SIGNALS["STEER"]] / 255.0) * 2 - 1
+
+        elif name == "BRAKE":
+            self.recvd_controls.brake = data[REQUIRED_SIGNALS["BRAKE"]] / 255.0
+
+        elif name == "HAND_BRAKE":
+            self.recvd_controls.hand_brake = bool(data[REQUIRED_SIGNALS["HAND_BRAKE"]])
+
+        elif name == "REVERSE":
+            self.recvd_controls.reverse = bool(data[REQUIRED_SIGNALS["REVERSE"]])
+
+        elif name == "MANUAL_TRANSMISSION":
+            self.recvd_controls.manual_gear_shift = bool(data[REQUIRED_SIGNALS["MANUAL_TRANSMISSION"]])
+
+        elif name == "GEAR":
+            self.recvd_controls.gear = int(data[REQUIRED_SIGNALS["GEAR"]])
+
+        elif name == "DOORS":
+            if data[REQUIRED_SIGNALS["DOORS"]]:
+                print(data)
+                self.door_change_state = True
+
+        elif name == "GENERAL_LIGHTS":
+            lights_int = 0
+            for sig, flag in LIGHT_SIGNALS.items():
+                if data.get(sig, 0):
+                    lights_int |= flag
+            self.current_lights = carla.VehicleLightState(lights_int)
+
+        elif name in SENSOR_MESSAGES:
+            pass  # sensor telemetry — published by the CARLA client; no actuation here
+
     def recv_msg(self):
-        """Read all pending CAN frames and update recvd_controls accordingly."""
+        """Read all pending CAN frames and update recvd_controls accordingly.
+
+        No-op (beyond returning the current recvd_controls) when this ECU is attached to
+        a shared bus (bus= was given, e.g. via SharedPhysicalBus) — draining that bus is
+        centralized elsewhere, since only one consumer may call .recv() on it.
+        """
+        if not self._owns_bus:
+            return self.recvd_controls
         try:
             recv_msg = self.bus.recv(timeout=0)
         except can.CanOperationError:
             return self.recvd_controls
         while recv_msg is not None:
-            data = self.db.decode_message(recv_msg.arbitration_id, recv_msg.data)
-
-            try:
-                dbc_msg = self.db.get_message_by_frame_id(recv_msg.arbitration_id)
-            except KeyError:
-                print(f"[CAN] INFO: Received unknown arbitration_id 0x{recv_msg.arbitration_id:X}, skipping")
-                recv_msg = self.bus.recv(timeout=0)
-                continue
-
-            name = dbc_msg.name
-
-            if name not in self.messages:
-                try:
-                    recv_msg = self.bus.recv(timeout=0)
-                except can.CanOperationError:
-                    break
-                continue
-
-            if name == "THROTTLE":
-                self.recvd_controls.throttle = data[REQUIRED_SIGNALS["THROTTLE"]] / 255.0
-
-            elif name == "STEER":
-                self.recvd_controls.steer = (data[REQUIRED_SIGNALS["STEER"]] / 255.0) * 2 - 1
-
-            elif name == "BRAKE":
-                self.recvd_controls.brake = data[REQUIRED_SIGNALS["BRAKE"]] / 255.0
-
-            elif name == "HAND_BRAKE":
-                self.recvd_controls.hand_brake = bool(data[REQUIRED_SIGNALS["HAND_BRAKE"]])
-
-            elif name == "REVERSE":
-                self.recvd_controls.reverse = bool(data[REQUIRED_SIGNALS["REVERSE"]])
-
-            elif name == "MANUAL_TRANSMISSION":
-                self.recvd_controls.manual_gear_shift = bool(data[REQUIRED_SIGNALS["MANUAL_TRANSMISSION"]])
-
-            elif name == "GEAR":
-                self.recvd_controls.gear = int(data[REQUIRED_SIGNALS["GEAR"]])
-
-            elif name == "DOORS":
-                if data[REQUIRED_SIGNALS["DOORS"]]:
-                    print(data)
-                    self.door_change_state = True
-
-            elif name == "GENERAL_LIGHTS":
-                lights_int = 0
-                for sig, flag in LIGHT_SIGNALS.items():
-                    if data.get(sig, 0):
-                        lights_int |= flag
-                self.current_lights = carla.VehicleLightState(lights_int)
-
-            elif name in SENSOR_MESSAGES:
-                pass  # sensor telemetry — published by the CARLA client; no actuation here
-
+            self._apply_frame(recv_msg)
             try:
                 recv_msg = self.bus.recv(timeout=0)
             except can.CanOperationError:
                 break
 
         return self.recvd_controls
+
+
+class SharedPhysicalBus:
+    """One physical neovi device, opened once, carrying two logical CAN channels
+    (e.g. HSCAN/HSCAN2). The ics driver can only open a given device once per process,
+    so the POWERTRAIN/COMFORT ECUs (and any traffic-display sniffers) for one physical
+    device must all read/write through this single bus instead of each opening their own.
+
+    `poll()` is the only place that calls `.recv()` on the underlying bus, and dispatches
+    each frame to whichever registered consumer's netid matches `raw.channel`.
+    """
+
+    def __init__(self, powertrain_channel, comfort_channel, serial=None):
+        from can.interfaces.ics_neovi.neovi_bus import NeoViBus
+
+        self.bus = can.ThreadSafeBus(**bus_kwargs(f"{powertrain_channel},{comfort_channel}", serial=serial))
+        print(f"[CAN] Shared bus opened: {self.bus.channel_info}")
+        self.powertrain_netid = NeoViBus.channel_to_netid(powertrain_channel)
+        self.comfort_netid = NeoViBus.channel_to_netid(comfort_channel)
+        self._consumers = []  # list of (netid, callback(raw_msg))
+
+    def add_consumer(self, netid, callback):
+        self._consumers.append((netid, callback))
+
+    def poll(self):
+        while True:
+            try:
+                raw = self.bus.recv(timeout=0)
+            except can.CanOperationError:
+                break
+            if raw is None:
+                break
+            for netid, callback in self._consumers:
+                if raw.channel == netid:
+                    callback(raw)
+
+    def shutdown(self):
+        self.bus.shutdown()

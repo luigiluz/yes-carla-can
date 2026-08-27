@@ -32,8 +32,9 @@ except IndexError:
 import carla
 import pygame
 
-from can_network.network import CAN_Network, VCAN_CHANNEL
-from gui import CANTrafficDisplay, HUD, KeyboardControl, World
+import can_network
+from can_network.network import VCAN_CHANNEL
+from gui import HUD, KeyboardControl, World
 
 
 def game_loop(args):
@@ -45,10 +46,12 @@ def game_loop(args):
 
     world = None
     original_settings = None
-    powertrain_ecu = CAN_Network(channel=args.powertrain_channel, serial=args.can_serial, ecu_bus="POWERTRAIN")
-    comfort_ecu = CAN_Network(channel=args.comfort_channel, serial=args.can_serial, ecu_bus="COMFORT")
-    powertrain_display = CANTrafficDisplay(channel=args.powertrain_channel, serial=args.can_serial)
-    comfort_display = CANTrafficDisplay(channel=args.comfort_channel, serial=args.can_serial)
+    bundle = can_network.open_ecu_bundle(
+        "data/carla.dbc", args.powertrain_channel, args.comfort_channel,
+        serial=args.can_serial, with_displays=True,
+    )
+    powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
+    powertrain_display, comfort_display = bundle.powertrain_display, bundle.comfort_display
 
     try:
         client = carla.Client(args.host, args.port)
@@ -99,6 +102,7 @@ def game_loop(args):
             if args.sync:
                 sim_world.tick()
             clock.tick_busy_loop(60)
+            bundle.poll()
             if controller.parse_events(client, world, clock, args.sync, powertrain_ecu, comfort_ecu):
                 return
             world.tick(clock)
@@ -117,10 +121,7 @@ def game_loop(args):
             except Exception:
                 pass
 
-        powertrain_display.stop()
-        comfort_display.stop()
-        powertrain_ecu.bus.shutdown()
-        comfort_ecu.bus.shutdown()
+        bundle.shutdown()
 
         try:
             if original_settings:
