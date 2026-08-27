@@ -389,7 +389,7 @@ The output should look like the following:
 CAN network attacks CLI
 usage: cyberattacks_module.py [-h]
                               [--feature {hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}]
-                              [--period PERIOD]
+                              [--period PERIOD] [--channel CHANNEL] [--can-serial CAN_SERIAL]
 
 Perform CAN network attacks.
 
@@ -398,9 +398,16 @@ optional arguments:
   --feature {hand_brake,doors,reverse,high_beam,internal_lights,low_beam,fog_lights,lights_off,position_lights,left_blink,right_blink,fuzzy,denial_of_service}
                         Feature to attack
   --period PERIOD       Period between messages in seconds
+  --channel CHANNEL     CAN channel/interface name for the attacker bus, virtual or physical
+                        (default: vcan1)
+  --can-serial CAN_SERIAL
+                        Serial number of the physical CAN device (physical mode only; defaults
+                        to the CAN_SERIAL env var, then auto-detect)
 ```
 
 This lists all available attacks. Attacks that correspond directly to a vehicle function (e.g., `hand_brake`, `doors`) are spoofing attacks targeting those features. You also need to specify `--period`, which defines the time interval between attack messages sent onto the virtual CAN network.
+
+**Physical mode:** by default the module attacks the virtual `vcan1` bus, which `can-gw` bridges into `vcan0`. To attack a real Intrepid device instead, `export CAN_INTERFACE=neovi` (and `CAN_BITRATE` if needed) in the shell before running the command above, and pass `--channel` (e.g. `HSCAN`, matching whichever channel the target ECU is on) and `--can-serial` to select the device — no bridge is needed since the attacker is already a node on the same physical bus as the target. Not sure which serial to use? Run `python3 list_can_devices.py` to list connected Intrepid devices and their serials. Note that `--can-serial` only has an effect once `CAN_INTERFACE=neovi` is exported — otherwise it's ignored and the module tries (and fails) to open `--channel` as a virtual/socketcan interface.
 
 To perform the `hand_brake` spoofing attack, run the following command:
 

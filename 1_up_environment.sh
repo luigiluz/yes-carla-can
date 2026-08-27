@@ -39,9 +39,14 @@ In --can-mode physical:
   and a COMFORT-bus ECU — both talking to the same Intrepid CAN device (selected by
   serial number) but on two different channels. The CARLA client module and the vehicle
   controls module are independent processes and may be wired to two different physical
-  devices. Requires --client-can-serial and --controls-can-serial. Note: the attacker/IDS
-  demo path (cyberattacks_module.py, intrusion_detection_module.py) relies on the
-  vcan1/can-gw bridge and stays virtual-only for now.
+  devices. Requires --client-can-serial and --controls-can-serial. Note: this script does
+  not launch the attacker/IDS demo path (cyberattacks_module.py, intrusion_detection_module.py)
+  itself — run it manually in a separate shell. cyberattacks_module.py also supports physical
+  mode: export CAN_INTERFACE=neovi (and CAN_BITRATE if needed) in that shell, then pass
+  --channel (typically the same channel as the ECU you're attacking, e.g. HSCAN) and
+  --can-serial to send attack frames directly onto the device, no vcan1/can-gw bridge needed
+  since it's already on the same physical bus. intrusion_detection_module.py still relies on
+  the vcan1/can-gw bridge and stays virtual-only for now.
 
 Options:
   -h, --help                  Show this help message and exit
