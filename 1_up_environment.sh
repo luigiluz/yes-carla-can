@@ -14,6 +14,7 @@ CONTROLS_COMFORT_CHANNEL="${CONTROLS_COMFORT_CHANNEL:-HSCAN2}"
 CONTROLS_CAN_SERIAL="${CONTROLS_CAN_SERIAL:-}"
 CAN_BITRATE="${CAN_BITRATE:-}"
 CLIENT_RES="${CLIENT_RES:-}"
+CAN_LOG_DIR="${CAN_LOG_DIR:-}"
 
 usage() {
     cat <<EOF
@@ -60,9 +61,17 @@ Options:
   --controls-comfort-channel <name>    [physical mode] COMFORT-bus channel for that device
                                (default: HSCAN2)
   --can-bitrate <bps>         [physical mode] Bus bitrate (default: auto-detect)
-  --res <WIDTHxHEIGHT>        Client window/camera sensor resolution (default: 1280x720,
+  --res <WIDTHxHEIGHT>        Client window/camera sensor resolution (default: 1920x1080,
                                set by CARLA_client_module.py). Lower this on weak GPUs, the
-                               camera sensor renders at this size every frame.
+                               camera sensor renders at this size every frame. Keep it well
+                               above 960 wide so the two 480px-wide CAN traffic panels don't
+                               cover the whole window.
+  --can-log-dir <dir>         Directory where the client writes candump-format .log files
+                               of the POWERTRAIN/COMFORT traffic shown in its panels
+                               (default: traffic_logs, set by CARLA_client_module.py). Pass
+                               "none" to disable file logging. Useful in --can-mode
+                               physical, where candump can't attach to the Intrepid
+                               device directly.
 
 Environment variables:
   CARLA_FOLDER_NAME     Directory where CARLA is installed (default: carla-0-9-15)
@@ -72,6 +81,7 @@ Environment variables:
   VCAN_INTERFACE        Virtual CAN interface name, overridden by --vcan if provided
   VK_ICD_FILENAMES      Force a specific Vulkan ICD file (skips auto-detection)
   CLIENT_RES            Client window/camera resolution, overridden by --res if provided
+  CAN_LOG_DIR           Directory for client CAN traffic logs, overridden by --can-log-dir if provided
 EOF
 }
 
@@ -89,6 +99,7 @@ while [[ $# -gt 0 ]]; do
         --controls-comfort-channel) CONTROLS_COMFORT_CHANNEL="$2"; shift 2 ;;
         --can-bitrate) CAN_BITRATE="$2"; shift 2 ;;
         --res) CLIENT_RES="$2"; shift 2 ;;
+        --can-log-dir) CAN_LOG_DIR="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; usage; exit 1 ;;
     esac
 done
@@ -136,6 +147,7 @@ CLIENT_ARGS=()
 CONTROLS_ARGS=(--dbc "${DBC_PATH}")
 
 [[ -n "${CLIENT_RES}" ]] && CLIENT_ARGS+=(--res "${CLIENT_RES}")
+[[ -n "${CAN_LOG_DIR}" ]] && CLIENT_ARGS+=(--can-log-dir "${CAN_LOG_DIR}")
 
 if [[ "${CAN_MODE}" == "virtual" ]]; then
     echo "Setting up virtual CAN bus..."

@@ -1,3 +1,6 @@
+import datetime
+import os
+
 from can_network.bus_config import CAN_INTERFACE
 from can_network.network import CAN_Network, SharedPhysicalBus
 
@@ -25,14 +28,27 @@ class ECUBundle:
         self._shutdown_fn()
 
 
-def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, with_displays=False):
+def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, with_displays=False,
+                     log_dir=None):
     """Build the POWERTRAIN/COMFORT ECU pair for one script.
 
     On the neovi backend, a physical device can only be opened once per process, so both
     ECUs (and, if requested, both traffic-display panels) share a single SharedPhysicalBus
     handle. On socketcan/vcan, each ECU keeps opening its own bus independently — the
     kernel already lets multiple sockets attach to one interface, so no sharing is needed.
+
+    log_dir: if given, write every frame passing through the POWERTRAIN/COMFORT traffic
+    display (candump-format, one file per bus) to this directory — even if with_displays
+    is False, since rendering and logging are independent consumers of the same frames.
+    Useful on the neovi backend, where candump can't attach to the device directly.
     """
+    run_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    def log_path(role, channel):
+        if not log_dir:
+            return None
+        return os.path.join(log_dir, f"{role}_{channel}_{run_ts}.log")
+
     if CAN_INTERFACE == "neovi":
         shared = SharedPhysicalBus(powertrain_channel, comfort_channel, serial=serial)
         powertrain = CAN_Network(dbc_path, ecu_bus="POWERTRAIN", bus=shared.bus, send_channel=shared.powertrain_netid)
@@ -41,10 +57,16 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
         shared.add_consumer(shared.comfort_netid, comfort._apply_frame)
 
         powertrain_display = comfort_display = None
-        if with_displays:
+        if with_displays or log_dir:
             from gui import CANTrafficDisplay
-            powertrain_display = CANTrafficDisplay(channel=powertrain_channel, passive=True)
-            comfort_display = CANTrafficDisplay(channel=comfort_channel, passive=True)
+            powertrain_display = CANTrafficDisplay(
+                channel=powertrain_channel, passive=True,
+                log_path=log_path("POWERTRAIN", powertrain_channel),
+            )
+            comfort_display = CANTrafficDisplay(
+                channel=comfort_channel, passive=True,
+                log_path=log_path("COMFORT", comfort_channel),
+            )
             shared.add_consumer(shared.powertrain_netid, powertrain_display.feed)
             shared.add_consumer(shared.comfort_netid, comfort_display.feed)
 
@@ -61,10 +83,16 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
     comfort = CAN_Network(dbc_path, channel=comfort_channel, serial=serial, ecu_bus="COMFORT")
 
     powertrain_display = comfort_display = None
-    if with_displays:
+    if with_displays or log_dir:
         from gui import CANTrafficDisplay
-        powertrain_display = CANTrafficDisplay(channel=powertrain_channel, serial=serial)
-        comfort_display = CANTrafficDisplay(channel=comfort_channel, serial=serial)
+        powertrain_display = CANTrafficDisplay(
+            channel=powertrain_channel, serial=serial,
+            log_path=log_path("POWERTRAIN", powertrain_channel),
+        )
+        comfort_display = CANTrafficDisplay(
+            channel=comfort_channel, serial=serial,
+            log_path=log_path("COMFORT", comfort_channel),
+        )
 
     def poll():
         powertrain.recv_msg()

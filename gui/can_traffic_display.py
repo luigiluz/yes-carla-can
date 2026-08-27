@@ -1,4 +1,5 @@
 import datetime
+import os
 import threading
 from collections import deque
 
@@ -24,11 +25,16 @@ class CANTrafficDisplay:
     COLOR_DIVIDER = (0, 180, 80)
 
     def __init__(self, channel: str = VCAN_CHANNEL, serial: str = None, max_messages: int = 30,
-                 passive: bool = False):
+                 passive: bool = False, log_path: str = None):
         """passive=True: don't open a bus/thread of our own — the caller feeds frames via
         feed(), e.g. a SharedPhysicalBus that already owns the one allowed handle to this
         physical device. Used on the neovi backend, where opening yet another handle to
-        the same device would fail."""
+        the same device would fail.
+
+        log_path: if given, every frame shown in the panel is also appended to this file
+        in candump format (the extension picks the writer — see can.Logger), so traffic
+        can be replayed/analyzed later. Useful on the neovi backend where candump itself
+        can't attach to the device."""
         self._messages: deque[str] = deque(maxlen=max_messages)
         self._lock = threading.Lock()
         self._active = False
@@ -36,6 +42,10 @@ class CANTrafficDisplay:
         self._bus = None
         self._passive = passive
         self._header = f"CAN Traffic  ({channel})"
+        self._logger = None
+        if log_path:
+            os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+            self._logger = can.Logger(log_path)
 
         if passive:
             self._active = True
@@ -60,6 +70,8 @@ class CANTrafficDisplay:
         """Passive mode: called by whoever owns the shared bus for each frame on our channel."""
         with self._lock:
             self._messages.append(self._format_line(msg))
+        if self._logger:
+            self._logger(msg)
 
     def _recv_loop(self):
         while self._active:
@@ -69,6 +81,8 @@ class CANTrafficDisplay:
                     continue
                 with self._lock:
                     self._messages.append(self._format_line(msg))
+                if self._logger:
+                    self._logger(msg)
             except can.CanOperationError:
                 self._active = False
                 break
@@ -96,6 +110,8 @@ class CANTrafficDisplay:
     # ------------------------------------------------------------------
 
     def stop(self):
+        if self._logger:
+            self._logger.stop()
         if self._passive:
             return
         self._active = False

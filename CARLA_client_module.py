@@ -49,6 +49,7 @@ def game_loop(args):
     bundle = can_network.open_ecu_bundle(
         "data/carla.dbc", args.powertrain_channel, args.comfort_channel,
         serial=args.can_serial, with_displays=True,
+        log_dir=None if args.can_log_dir.lower() in ("", "none") else args.can_log_dir,
     )
     powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
     powertrain_display, comfort_display = bundle.powertrain_display, bundle.comfort_display
@@ -83,12 +84,12 @@ def game_loop(args):
             )
 
         display = pygame.display.set_mode(
-            (width // 2, height // 2), pygame.HWSURFACE | pygame.DOUBLEBUF
+            (width, height), pygame.HWSURFACE | pygame.DOUBLEBUF
         )
         display.fill((0, 0, 0))
         pygame.display.flip()
 
-        hud = HUD(width // 2, height // 2)
+        hud = HUD(width, height)
         world = World(sim_world, hud, args, comfort_ecu)
         controller = KeyboardControl(world, args.autopilot)
 
@@ -167,8 +168,8 @@ def main():
     argparser.add_argument(
         "--res",
         metavar="WIDTHxHEIGHT",
-        default="1280x720",
-        help="window resolution (default: 1280x720)",
+        default="1920x1080",
+        help="window resolution (default: 1920x1080)",
     )
     argparser.add_argument(
         "--filter",
@@ -214,6 +215,13 @@ def main():
         default=None,
         help="Serial number of the physical CAN device shared by both ECUs (physical mode "
         "only; defaults to the CAN_SERIAL env var, then auto-detect)",
+    )
+    argparser.add_argument(
+        "--can-log-dir",
+        default="traffic_logs",
+        help="Directory to write candump-format .log files of everything shown in the "
+        "POWERTRAIN/COMFORT traffic panels (default: traffic_logs). Pass \"none\" to "
+        "disable file logging.",
     )
     args = argparser.parse_args()
 
