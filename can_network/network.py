@@ -4,22 +4,46 @@ import can
 import carla
 
 from can_network.bus_config import VCAN_CHANNEL, bus_kwargs
-from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
+from can_network.dbc import (
+    load_and_validate,
+    REQUIRED_SIGNALS,
+    LIGHT_SIGNALS,
+    SENSOR_MESSAGES,
+    SUPPORTED_MESSAGES,
+    BUS_ASSIGNMENT,
+    ECU_BUSES,
+)
 
 SLOW_SEND_WARN_MS = 50
 
 
 class CAN_Network(object):
-    """Interface to the CAN bus (virtual or physical) backed by a DBC message schema."""
+    """Interface to one CAN bus (virtual or physical) backed by a DBC message schema.
 
-    door_change_state = False
-    current_lights = carla.VehicleLightState.NONE
+    `ecu_bus`, when given, scopes this instance to a single ECU bus role (e.g.
+    "POWERTRAIN" or "COMFORT" — see can_network.dbc.BUS_ASSIGNMENT): only messages
+    assigned to that bus are sent/decoded, and sending a message assigned to a
+    different bus raises, the same way a real ECU's send table would reject it.
+    Leave it None (default) for the unscoped, single-bus behavior.
+    """
 
-    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL, serial=None):
+    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL, serial=None, ecu_bus=None):
         self.bus = can.ThreadSafeBus(**bus_kwargs(channel, serial=serial))
         print(f"[CAN] Bus opened: {self.bus.channel_info}")
         self.recvd_controls = carla.VehicleControl()
+        self.door_change_state = False
+        self.current_lights = carla.VehicleLightState.NONE
         self.db, self.cycle_times = load_and_validate(dbc_path)
+
+        if ecu_bus is not None and ecu_bus not in ECU_BUSES:
+            raise ValueError(f"[CAN] Unknown ecu_bus '{ecu_bus}', expected one of {sorted(ECU_BUSES)}")
+        self.ecu_bus = ecu_bus
+        self.messages = (
+            frozenset(n for n in SUPPORTED_MESSAGES if BUS_ASSIGNMENT.get(n) == ecu_bus)
+            if ecu_bus is not None
+            else frozenset(SUPPORTED_MESSAGES)
+        )
+        self.cycle_times = {n: t for n, t in self.cycle_times.items() if n in self.messages}
 
     # ------------------------------------------------------------------
     # Internal helper
@@ -35,8 +59,16 @@ class CAN_Network(object):
         if elapsed_ms > SLOW_SEND_WARN_MS:
             print(f"[CAN] WARNING: {label} send took {elapsed_ms:.0f}ms (id=0x{msg.arbitration_id:X})")
 
+    def _check_bus(self, message_name):
+        if message_name not in self.messages:
+            raise ValueError(
+                f"[CAN] '{message_name}' is not on this ECU's bus "
+                f"(ecu_bus={self.ecu_bus!r}); wrong ECU instance for this message"
+            )
+
     def _build_msg(self, message_name, value) -> can.Message:
         """Encode a single-signal CAN message from the DBC and return a can.Message ready to send."""
+        self._check_bus(message_name)
         try:
             dbc_msg = self.db.get_message_by_name(message_name)
         except KeyError:
@@ -54,6 +86,7 @@ class CAN_Network(object):
 
     def _build_sensor_msg(self, message_name, signals_dict) -> can.Message:
         """Encode a multi-signal CAN message from the DBC and return a can.Message ready to send."""
+        self._check_bus(message_name)
         try:
             dbc_msg = self.db.get_message_by_name(message_name)
         except KeyError:
@@ -76,6 +109,7 @@ class CAN_Network(object):
         self._send(self._build_msg("DOORS", True), "DOORS")
 
     def send_current_lights_msg(self, lights):
+        self._check_bus("GENERAL_LIGHTS")
         dbc_msg = self.db.get_message_by_name("GENERAL_LIGHTS")
         lights_int = int(lights)
         signal_dict = {sig: int(bool(lights_int & flag)) for sig, flag in LIGHT_SIGNALS.items()}
@@ -193,6 +227,13 @@ class CAN_Network(object):
                 continue
 
             name = dbc_msg.name
+
+            if name not in self.messages:
+                try:
+                    recv_msg = self.bus.recv(timeout=0)
+                except can.CanOperationError:
+                    break
+                continue
 
             if name == "THROTTLE":
                 self.recvd_controls.throttle = data[REQUIRED_SIGNALS["THROTTLE"]] / 255.0

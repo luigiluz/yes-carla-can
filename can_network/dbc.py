@@ -51,6 +51,19 @@ SENSOR_SIGNAL_NAMES = {
     name: frozenset(sigs) for name, (sigs, _) in SENSOR_MESSAGES.items()
 }
 
+# ECU bus assignment — which physical/logical CAN bus each message travels on.
+# POWERTRAIN: signals tied to the vehicle moving. COMFORT: cabin/comfort + sensor telemetry.
+BUS_ASSIGNMENT = {
+    "THROTTLE": "POWERTRAIN", "BRAKE": "POWERTRAIN", "STEER": "POWERTRAIN",
+    "REVERSE": "POWERTRAIN", "HAND_BRAKE": "POWERTRAIN",
+    "MANUAL_TRANSMISSION": "POWERTRAIN", "GEAR": "POWERTRAIN", "AUTOPILOT": "POWERTRAIN",
+    "DOORS": "COMFORT", "GENERAL_LIGHTS": "COMFORT",
+    "GNSS": "COMFORT", "COLLISION": "COMFORT", "LANE_INVASION": "COMFORT",
+    "IMU_ACCEL": "COMFORT", "IMU_GYRO": "COMFORT", "IMU_COMPASS": "COMFORT",
+    "RADAR_TARGET": "COMFORT",
+}
+ECU_BUSES = frozenset(BUS_ASSIGNMENT.values())
+
 # Derived constants — do not edit these; edit MESSAGES / SENSOR_MESSAGES above instead.
 REQUIRED_MESSAGES = frozenset(name for name, (_, _, required) in MESSAGES.items() if required)
 SUPPORTED_MESSAGES = frozenset(MESSAGES.keys()) | frozenset(SENSOR_MESSAGES.keys())

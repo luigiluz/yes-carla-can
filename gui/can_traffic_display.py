@@ -18,7 +18,6 @@ class CANTrafficDisplay:
     PANEL_WIDTH = 480
     LINE_HEIGHT = 22
     PADDING = 8
-    HEADER = f"CAN Traffic  ({VCAN_CHANNEL})"
     COLOR_BG = (0, 0, 0)
     COLOR_HEADER = (0, 230, 100)
     COLOR_TEXT = (160, 255, 160)
@@ -30,6 +29,7 @@ class CANTrafficDisplay:
         self._active = False
         self._font = None
         self._bus = None
+        self._header = f"CAN Traffic  ({channel})"
 
         try:
             self._bus = can.Bus(**bus_kwargs(channel, serial=serial))
@@ -87,10 +87,12 @@ class CANTrafficDisplay:
         if hasattr(self, "_thread"):
             self._thread.join(timeout=2.0)
 
-    def render(self, display: pygame.Surface):
+    def render(self, display: pygame.Surface, slot: int = 0):
+        """slot: 0 = rightmost panel, 1 = the one to its left, etc. — lets several
+        CANTrafficDisplay instances (one per bus/channel) be drawn side by side."""
         self._init_font()
         screen_w, screen_h = display.get_size()
-        panel_x = screen_w - self.PANEL_WIDTH
+        panel_x = screen_w - self.PANEL_WIDTH * (slot + 1)
 
         # Semi-transparent background
         bg = pygame.Surface((self.PANEL_WIDTH, screen_h), pygame.SRCALPHA)
@@ -100,7 +102,7 @@ class CANTrafficDisplay:
         # Header
         status = "" if self._active else "  [unavailable]"
         header_surf = self._font.render(
-            self.HEADER + status, True, self.COLOR_HEADER
+            self._header + status, True, self.COLOR_HEADER
         )
         display.blit(header_surf, (panel_x + self.PADDING, self.PADDING))
 

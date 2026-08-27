@@ -7,7 +7,7 @@ import carla
 
 import can_network
 from can_network import VCAN_CHANNEL
-from can_network.dbc import MESSAGE_SENDERS
+from can_network.dbc import MESSAGE_SENDERS, BUS_ASSIGNMENT
 
 try:
     import pygame
@@ -41,12 +41,12 @@ except ImportError:
 class KeyboardSenderControl(object):
     """Class that handles keyboard input and periodic CAN message sending."""
 
-    def __init__(self, can_net, start_in_autopilot=False):
+    def __init__(self, powertrain_ecu, comfort_ecu, start_in_autopilot=False):
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
 
-        self._can_net = can_net  # store the CAN_Network instance
+        self._ecus = {"POWERTRAIN": powertrain_ecu, "COMFORT": comfort_ecu}
 
         self._control = carla.VehicleControl()
         self._ackermann_control = carla.VehicleAckermannControl()
@@ -54,12 +54,13 @@ class KeyboardSenderControl(object):
 
         self._steer_cache = 0.0
 
-        # Build per-message timers from cycle times already loaded by CAN_Network.
+        # Build per-message timers from cycle times already loaded by each ECU.
         now = time.time()
         # _msg_timers: {msg_name: [interval_seconds, last_sent_timestamp]}
         self._msg_timers = {
             name: [interval, now]
-            for name, interval in can_net.cycle_times.items()
+            for ecu in (powertrain_ecu, comfort_ecu)
+            for name, interval in ecu.cycle_times.items()
             if name in MESSAGE_SENDERS
         }
 
@@ -72,7 +73,8 @@ class KeyboardSenderControl(object):
         now = time.time()
         for msg_name, (interval, last_sent) in self._msg_timers.items():
             if now - last_sent >= interval:
-                method = getattr(self._can_net, MESSAGE_SENDERS[msg_name], None)
+                ecu = self._ecus[BUS_ASSIGNMENT[msg_name]]
+                method = getattr(ecu, MESSAGE_SENDERS[msg_name], None)
                 if method is not None:
                     try:
                         method(self._control)
@@ -80,7 +82,7 @@ class KeyboardSenderControl(object):
                         print(f"[CAN] Failed to send {msg_name}: {e}")
                 else:
                     print(
-                        f"[CAN] Method {self.MESSAGE_SENDERS[msg_name]} not found on CAN_Network"
+                        f"[CAN] Method {MESSAGE_SENDERS[msg_name]} not found on CAN_Network"
                     )
                 self._msg_timers[msg_name][1] = now
 
@@ -138,7 +140,8 @@ class KeyboardSenderControl(object):
         else:
             self._ackermann_control.steer = round(self._steer_cache, 1)
 
-    def parse_events(self, clock, can_network):
+    def parse_events(self, clock):
+        comfort_ecu = self._ecus["COMFORT"]
         current_lights = self._lights
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -148,7 +151,7 @@ class KeyboardSenderControl(object):
                     return True
                 elif event.key == K_o:
                     try:
-                        can_network.send_switch_door_state_msg()
+                        comfort_ecu.send_switch_door_state_msg()
                     except:
                         pass
                 elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
@@ -202,7 +205,7 @@ class KeyboardSenderControl(object):
 
         # Event-driven: lights changed → send immediately
         if self._lights != current_lights:
-            can_network.send_current_lights_msg(current_lights)
+            comfort_ecu.send_current_lights_msg(current_lights)
             self._lights = current_lights
 
         # Periodic: send each message according to its DBC cycle time
@@ -213,7 +216,7 @@ class KeyboardSenderControl(object):
         return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 
-def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None, can_serial=None):
+def keyboard_parser_loop(dbc_path="data/carla.dbc", powertrain_channel=None, comfort_channel=None, can_serial=None):
     print("Starting keyboard parser loop")
     pygame.init()
     pygame.font.init()
@@ -361,8 +364,13 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None, can_seria
     # Flush the initial drawing to screen before any potentially-blocking CAN init
     pygame.display.flip()
 
-    can_net = can_network.CAN_Network(dbc_path=dbc_path, channel=vcan_channel, serial=can_serial)
-    controller = KeyboardSenderControl(can_net)
+    powertrain_ecu = can_network.CAN_Network(
+        dbc_path=dbc_path, channel=powertrain_channel, serial=can_serial, ecu_bus="POWERTRAIN"
+    )
+    comfort_ecu = can_network.CAN_Network(
+        dbc_path=dbc_path, channel=comfort_channel, serial=can_serial, ecu_bus="COMFORT"
+    )
+    controller = KeyboardSenderControl(powertrain_ecu, comfort_ecu)
     scheduled = [f"{name}({int(iv[0] * 1000)}ms)" for name, iv in sorted(controller._msg_timers.items())]
     print(f"[CAN] DBC loaded: {dbc_path}")
     print(f"[CAN] Periodic messages scheduled: {' '.join(scheduled)}")
@@ -371,10 +379,11 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None, can_seria
 
     while running:
         clock.tick_busy_loop(60)
-        # Drain the bus's RX/echo queue even though we don't act on it here — on the
+        # Drain each bus's RX/echo queue even though we don't act on it here — on the
         # physical (Intrepid) backend, letting it go unread stalls sends after a while.
-        can_net.recv_msg()
-        if controller.parse_events(clock, can_net):
+        powertrain_ecu.recv_msg()
+        comfort_ecu.recv_msg()
+        if controller.parse_events(clock):
             running = False
             break
 
@@ -438,15 +447,22 @@ def main():
         help="Path to the DBC file (default: data/carla.dbc)",
     )
     parser.add_argument(
-        "--vcan",
+        "--powertrain-channel",
         default=VCAN_CHANNEL,
-        help=f"CAN channel/interface name, virtual or physical (default: {VCAN_CHANNEL})",
+        help=f"CAN channel/interface name for the POWERTRAIN-bus ECU, virtual or physical "
+        f"(default: {VCAN_CHANNEL})",
+    )
+    parser.add_argument(
+        "--comfort-channel",
+        default=VCAN_CHANNEL,
+        help=f"CAN channel/interface name for the COMFORT-bus ECU, virtual or physical "
+        f"(default: {VCAN_CHANNEL})",
     )
     parser.add_argument(
         "--can-serial",
         default=None,
-        help="Serial number of the physical CAN device to use (physical mode only; "
-        "defaults to the CAN_SERIAL env var, then auto-detect)",
+        help="Serial number of the physical CAN device shared by both ECUs (physical mode "
+        "only; defaults to the CAN_SERIAL env var, then auto-detect)",
     )
     args = parser.parse_args()
 
@@ -456,7 +472,12 @@ def main():
     print("Sending commands through CAN bus")
     print_key_bindings()
     try:
-        keyboard_parser_loop(dbc_path=args.dbc, vcan_channel=args.vcan, can_serial=args.can_serial)
+        keyboard_parser_loop(
+            dbc_path=args.dbc,
+            powertrain_channel=args.powertrain_channel,
+            comfort_channel=args.comfort_channel,
+            can_serial=args.can_serial,
+        )
     except (KeyboardInterrupt, SystemExit):
         print("\nCancelled by user. Bye!")
         pygame.quit()

@@ -29,8 +29,6 @@ try:
 except IndexError:
     pass
 
-import tkinter as tk
-
 import carla
 import pygame
 
@@ -42,16 +40,15 @@ def game_loop(args):
     pygame.init()
     pygame.font.init()
 
-    root = tk.Tk()
-    width = root.winfo_screenwidth()
-    height = root.winfo_screenheight()
-    root.destroy()
+    width, height = args.width, args.height
     print(f"width: {width}, height: {height}")
 
     world = None
     original_settings = None
-    can_bus = CAN_Network(channel=args.vcan, serial=args.can_serial)
-    can_display = CANTrafficDisplay(channel=args.vcan, serial=args.can_serial)
+    powertrain_ecu = CAN_Network(channel=args.powertrain_channel, serial=args.can_serial, ecu_bus="POWERTRAIN")
+    comfort_ecu = CAN_Network(channel=args.comfort_channel, serial=args.can_serial, ecu_bus="COMFORT")
+    powertrain_display = CANTrafficDisplay(channel=args.powertrain_channel, serial=args.can_serial)
+    comfort_display = CANTrafficDisplay(channel=args.comfort_channel, serial=args.can_serial)
 
     try:
         client = carla.Client(args.host, args.port)
@@ -60,7 +57,7 @@ def game_loop(args):
         # Disable rendering and set fixed time step
         sim_world = client.get_world()
         world_settings = sim_world.get_settings()
-        world_settings.no_rendering_mode = False  # Disable rendering
+        world_settings.no_rendering_mode = True  # Disable rendering
         # fps = 30
         # world_settings.fixed_delta_seconds = round(1/fps, 2) # Set FPS
         sim_world.apply_settings(world_settings)
@@ -89,7 +86,7 @@ def game_loop(args):
         pygame.display.flip()
 
         hud = HUD(width // 2, height // 2)
-        world = World(sim_world, hud, args, can_bus)
+        world = World(sim_world, hud, args, comfort_ecu)
         controller = KeyboardControl(world, args.autopilot)
 
         if args.sync:
@@ -102,11 +99,12 @@ def game_loop(args):
             if args.sync:
                 sim_world.tick()
             clock.tick_busy_loop(60)
-            if controller.parse_events(client, world, clock, args.sync, can_bus):
+            if controller.parse_events(client, world, clock, args.sync, powertrain_ecu, comfort_ecu):
                 return
             world.tick(clock)
             world.render(display)
-            can_display.render(display)
+            powertrain_display.render(display, slot=0)
+            comfort_display.render(display, slot=1)
             pygame.display.flip()
 
     finally:
@@ -119,8 +117,10 @@ def game_loop(args):
             except Exception:
                 pass
 
-        can_display.stop()
-        can_bus.bus.shutdown()
+        powertrain_display.stop()
+        comfort_display.stop()
+        powertrain_ecu.bus.shutdown()
+        comfort_ecu.bus.shutdown()
 
         try:
             if original_settings:
@@ -197,15 +197,22 @@ def main():
         "--sync", action="store_true", help="Activate synchronous mode execution"
     )
     argparser.add_argument(
-        "--vcan",
+        "--powertrain-channel",
         default=VCAN_CHANNEL,
-        help=f"CAN channel/interface name, virtual or physical (default: {VCAN_CHANNEL})",
+        help=f"CAN channel/interface name for the POWERTRAIN-bus ECU, virtual or physical "
+        f"(default: {VCAN_CHANNEL})",
+    )
+    argparser.add_argument(
+        "--comfort-channel",
+        default=VCAN_CHANNEL,
+        help=f"CAN channel/interface name for the COMFORT-bus ECU, virtual or physical "
+        f"(default: {VCAN_CHANNEL})",
     )
     argparser.add_argument(
         "--can-serial",
         default=None,
-        help="Serial number of the physical CAN device to use (physical mode only; "
-        "defaults to the CAN_SERIAL env var, then auto-detect)",
+        help="Serial number of the physical CAN device shared by both ECUs (physical mode "
+        "only; defaults to the CAN_SERIAL env var, then auto-detect)",
     )
     args = argparser.parse_args()
 

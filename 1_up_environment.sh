@@ -6,11 +6,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DBC_PATH="${DBC_PATH:-data/carla.dbc}"
 CAN_MODE="${CAN_MODE:-virtual}"
 VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
-CLIENT_CAN_CHANNEL="${CLIENT_CAN_CHANNEL:-HSCAN}"
+CLIENT_POWERTRAIN_CHANNEL="${CLIENT_POWERTRAIN_CHANNEL:-HSCAN}"
+CLIENT_COMFORT_CHANNEL="${CLIENT_COMFORT_CHANNEL:-HSCAN2}"
 CLIENT_CAN_SERIAL="${CLIENT_CAN_SERIAL:-}"
-CONTROLS_CAN_CHANNEL="${CONTROLS_CAN_CHANNEL:-HSCAN}"
+CONTROLS_POWERTRAIN_CHANNEL="${CONTROLS_POWERTRAIN_CHANNEL:-HSCAN}"
+CONTROLS_COMFORT_CHANNEL="${CONTROLS_COMFORT_CHANNEL:-HSCAN2}"
 CONTROLS_CAN_SERIAL="${CONTROLS_CAN_SERIAL:-}"
 CAN_BITRATE="${CAN_BITRATE:-}"
+CLIENT_RES="${CLIENT_RES:-}"
 
 usage() {
     cat <<EOF
@@ -31,12 +34,13 @@ In --can-mode virtual (default):
   labels attacker frames as 'R' and normal frames as 'T'. Both node scripts share it.
 
 In --can-mode physical:
-  Skips all vcan/can-gw setup. Each node script talks to its own Intrepid CAN device,
-  selected by serial number — the CARLA client module and the vehicle controls module are
-  independent processes and may be wired to two different physical devices. Requires
-  --client-can-serial and --controls-can-serial. Note: the attacker/IDS demo path
-  (cyberattacks_module.py, intrusion_detection_module.py) relies on the vcan1/can-gw bridge
-  and stays virtual-only for now.
+  Skips all vcan/can-gw setup. Each node script now runs two ECUs — a POWERTRAIN-bus ECU
+  and a COMFORT-bus ECU — both talking to the same Intrepid CAN device (selected by
+  serial number) but on two different channels. The CARLA client module and the vehicle
+  controls module are independent processes and may be wired to two different physical
+  devices. Requires --client-can-serial and --controls-can-serial. Note: the attacker/IDS
+  demo path (cyberattacks_module.py, intrusion_detection_module.py) relies on the
+  vcan1/can-gw bridge and stays virtual-only for now.
 
 Options:
   -h, --help                  Show this help message and exit
@@ -44,12 +48,21 @@ Options:
                                (default: data/carla.dbc)
   --can-mode <mode>           virtual or physical (default: virtual)
   --vcan <name>                [virtual mode] Name of the virtual CAN interface to create
-                               (default: vcan0)
+                               (default: vcan0); shared by both ECUs in virtual mode
   --client-can-serial <SN>    [physical mode] Serial of the device for CARLA_client_module.py
-  --client-can-channel <name> [physical mode] Channel/NetID for that device (default: HSCAN)
+  --client-powertrain-channel <name> [physical mode] POWERTRAIN-bus channel for that device
+                               (default: HSCAN)
+  --client-comfort-channel <name>    [physical mode] COMFORT-bus channel for that device
+                               (default: HSCAN2)
   --controls-can-serial <SN>  [physical mode] Serial of the device for vehicle_controls_module.py
-  --controls-can-channel <name> [physical mode] Channel/NetID for that device (default: HSCAN)
+  --controls-powertrain-channel <name> [physical mode] POWERTRAIN-bus channel for that device
+                               (default: HSCAN)
+  --controls-comfort-channel <name>    [physical mode] COMFORT-bus channel for that device
+                               (default: HSCAN2)
   --can-bitrate <bps>         [physical mode] Bus bitrate (default: auto-detect)
+  --res <WIDTHxHEIGHT>        Client window/camera sensor resolution (default: 1280x720,
+                               set by CARLA_client_module.py). Lower this on weak GPUs, the
+                               camera sensor renders at this size every frame.
 
 Environment variables:
   CARLA_FOLDER_NAME     Directory where CARLA is installed (default: carla-0-9-15)
@@ -58,6 +71,7 @@ Environment variables:
   CAN_MODE              virtual or physical, overridden by --can-mode if provided
   VCAN_INTERFACE        Virtual CAN interface name, overridden by --vcan if provided
   VK_ICD_FILENAMES      Force a specific Vulkan ICD file (skips auto-detection)
+  CLIENT_RES            Client window/camera resolution, overridden by --res if provided
 EOF
 }
 
@@ -68,10 +82,13 @@ while [[ $# -gt 0 ]]; do
         --can-mode) CAN_MODE="$2"; shift 2 ;;
         --vcan) VCAN_INTERFACE="$2"; shift 2 ;;
         --client-can-serial) CLIENT_CAN_SERIAL="$2"; shift 2 ;;
-        --client-can-channel) CLIENT_CAN_CHANNEL="$2"; shift 2 ;;
+        --client-powertrain-channel) CLIENT_POWERTRAIN_CHANNEL="$2"; shift 2 ;;
+        --client-comfort-channel) CLIENT_COMFORT_CHANNEL="$2"; shift 2 ;;
         --controls-can-serial) CONTROLS_CAN_SERIAL="$2"; shift 2 ;;
-        --controls-can-channel) CONTROLS_CAN_CHANNEL="$2"; shift 2 ;;
+        --controls-powertrain-channel) CONTROLS_POWERTRAIN_CHANNEL="$2"; shift 2 ;;
+        --controls-comfort-channel) CONTROLS_COMFORT_CHANNEL="$2"; shift 2 ;;
         --can-bitrate) CAN_BITRATE="$2"; shift 2 ;;
+        --res) CLIENT_RES="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; usage; exit 1 ;;
     esac
 done
@@ -113,10 +130,12 @@ fi
 
 # Start CARLA simulator in the background
 echo "Starting CARLA simulator..."
-./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality_level=Low -nosound 2>/dev/null &
+./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality-level=Low -nosound 2>/dev/null &
 
 CLIENT_ARGS=()
 CONTROLS_ARGS=(--dbc "${DBC_PATH}")
+
+[[ -n "${CLIENT_RES}" ]] && CLIENT_ARGS+=(--res "${CLIENT_RES}")
 
 if [[ "${CAN_MODE}" == "virtual" ]]; then
     echo "Setting up virtual CAN bus..."
@@ -135,14 +154,14 @@ if [[ "${CAN_MODE}" == "virtual" ]]; then
     sudo cangw -A -s "${VCAN_INTERFACE}" -d vcan1 -e
 
     export CAN_INTERFACE="socketcan"
-    CLIENT_ARGS+=(--vcan "${VCAN_INTERFACE}")
-    CONTROLS_ARGS+=(--vcan "${VCAN_INTERFACE}")
+    CLIENT_ARGS+=(--powertrain-channel "${VCAN_INTERFACE}" --comfort-channel "${VCAN_INTERFACE}")
+    CONTROLS_ARGS+=(--powertrain-channel "${VCAN_INTERFACE}" --comfort-channel "${VCAN_INTERFACE}")
 else
     echo "Physical CAN mode: skipping vcan/can-gw setup."
     export CAN_INTERFACE="neovi"
     [[ -n "${CAN_BITRATE}" ]] && export CAN_BITRATE
-    CLIENT_ARGS+=(--vcan "${CLIENT_CAN_CHANNEL}" --can-serial "${CLIENT_CAN_SERIAL}")
-    CONTROLS_ARGS+=(--vcan "${CONTROLS_CAN_CHANNEL}" --can-serial "${CONTROLS_CAN_SERIAL}")
+    CLIENT_ARGS+=(--powertrain-channel "${CLIENT_POWERTRAIN_CHANNEL}" --comfort-channel "${CLIENT_COMFORT_CHANNEL}" --can-serial "${CLIENT_CAN_SERIAL}")
+    CONTROLS_ARGS+=(--powertrain-channel "${CONTROLS_POWERTRAIN_CHANNEL}" --comfort-channel "${CONTROLS_COMFORT_CHANNEL}" --can-serial "${CONTROLS_CAN_SERIAL}")
 fi
 
 # Give CARLA a moment to initialise before connecting clients
