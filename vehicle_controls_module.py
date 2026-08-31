@@ -9,7 +9,12 @@ import carla
 import can_network
 from can_network import VCAN_CHANNEL
 from can_network.dbc import MESSAGE_SENDERS, BUS_ASSIGNMENT
-from input_devices import KeyboardInputDevice, XboxInputDevice
+from input_devices import (
+    KeyboardInputDevice,
+    XboxInputDevice,
+    load_xbox_bindings,
+    xbox_legend_rows,
+)
 
 try:
     import pygame
@@ -135,10 +140,23 @@ class VehicleSenderControl(object):
         self._send_periodic_messages()
 
 
-def run_parser_loop(input_mode, dbc_path="data/carla.dbc", powertrain_channel=None, comfort_channel=None, can_serial=None):
+def run_parser_loop(input_mode, dbc_path="data/carla.dbc", powertrain_channel=None, comfort_channel=None, can_serial=None, xbox_bindings_path=None):
     print(f"Starting {input_mode} parser loop")
     pygame.init()
     pygame.font.init()
+
+    input_device = (
+        KeyboardInputDevice()
+        if input_mode == "keyboard"
+        else XboxInputDevice(bindings_path=xbox_bindings_path)
+    )
+
+    # Colors shared by both the keyboard widget and the Xbox legend
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+    GRAY = (200, 200, 200)
+    GREEN = (100, 255, 100)
+    DARK_GRAY = (50, 50, 50)
 
     keys = []
     if input_mode == "keyboard":
@@ -150,14 +168,6 @@ def run_parser_loop(input_mode, dbc_path="data/carla.dbc", powertrain_channel=No
         WIDTH = int(width * 0.45)
         HEIGHT = int(height * 0.33)
         screen = pygame.display.set_mode((WIDTH, HEIGHT))
-
-        # Interface related
-        # Colors
-        WHITE = (255, 255, 255)
-        BLACK = (0, 0, 0)
-        GRAY = (200, 200, 200)
-        GREEN = (100, 255, 100)
-        DARK_GRAY = (50, 50, 50)
 
         key_definitions = [
             (pygame.K_q, "Q", "Reverse"),
@@ -284,17 +294,31 @@ def run_parser_loop(input_mode, dbc_path="data/carla.dbc", powertrain_channel=No
         # Flush the initial drawing to screen before any potentially-blocking CAN init
         pygame.display.flip()
     else:
-        pygame.joystick.init()
-        screen = pygame.display.set_mode((300, 100))
-        screen.fill((0, 0, 0))
-        font = pygame.font.SysFont(None, 22)
-        text_surf = font.render("Xbox controller connected - Start to quit", True, (255, 255, 255))
-        screen.blit(text_surf, text_surf.get_rect(center=(150, 50)))
-        pygame.display.flip()
+        legend_rows = xbox_legend_rows(input_device.bindings)
+
+        ROW_H = 26
+        WIDTH, HEIGHT = 460, 50 + ROW_H * len(legend_rows)
+        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        font = pygame.font.SysFont(None, 20)
+        title_font = pygame.font.SysFont(None, 24)
+
+        def draw_xbox_legend():
+            screen.fill(BLACK)
+            title = title_font.render(f"Xbox: {input_device.joystick.get_name()}", True, WHITE)
+            screen.blit(title, (10, 8))
+            y = 40
+            for row in legend_rows:
+                color = GREEN if input_device.is_row_active(row) else GRAY
+                pygame.draw.rect(screen, color, (10, y, WIDTH - 20, ROW_H - 4), border_radius=6)
+                text = font.render(f"{row['descriptor']}: {row['label']}", True, BLACK)
+                screen.blit(text, text.get_rect(center=(WIDTH // 2, y + (ROW_H - 4) // 2)))
+                y += ROW_H
+            pygame.display.flip()
+
+        draw_xbox_legend()
 
     bundle = can_network.open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=can_serial)
     powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
-    input_device = KeyboardInputDevice() if input_mode == "keyboard" else XboxInputDevice()
     controller = VehicleSenderControl(powertrain_ecu, comfort_ecu, input_device)
     scheduled = [f"{name}({int(iv[0] * 1000)}ms)" for name, iv in sorted(controller._msg_timers.items())]
     print(f"[CAN] DBC loaded: {dbc_path}")
@@ -327,6 +351,8 @@ def run_parser_loop(input_mode, dbc_path="data/carla.dbc", powertrain_channel=No
                 screen.blit(label_surf, label_rect)
 
             pygame.display.flip()
+        else:
+            draw_xbox_legend()
 
     pygame.quit()
     sys.exit(0)
@@ -362,23 +388,9 @@ def print_key_bindings():
     print()
 
 
-def print_xbox_bindings():
-    bindings = [
-        ("Left stick",         "Steer"),
-        ("Right trigger (RT)", "Throttle (hold)"),
-        ("Left trigger (LT)",  "Brake (hold)"),
-        ("LB",                 "Hand brake (hold)"),
-        ("A",                  "Toggle door open/close"),
-        ("B",                  "Cycle lights: off → position → low beam → fog"),
-        ("X",                  "Toggle manual gear shift"),
-        ("Y",                  "Toggle reverse gear"),
-        ("D-pad up/down",      "Gear up/down [manual mode]"),
-        ("D-pad left/right",   "Left/right blinker"),
-        ("Back",               "Toggle interior light"),
-        ("Left stick click",   "Toggle high beam"),
-        ("Right stick click",  "Toggle special light 1"),
-        ("Start",              "Quit"),
-    ]
+def print_xbox_bindings(bindings_path=None):
+    loaded = load_xbox_bindings(bindings_path)
+    bindings = [(row["descriptor"], row["label"]) for row in xbox_legend_rows(loaded)]
     col_w = max(len(k) for k, _ in bindings) + 2
     print()
     print("  CAN Sender — Xbox Controller Bindings")
@@ -422,6 +434,13 @@ def main():
         default="keyboard",
         help="Input device used to drive the vehicle (default: keyboard)",
     )
+    parser.add_argument(
+        "--xbox-bindings",
+        default="data/xbox_bindings.json",
+        help="Path to the Xbox controller button/axis mapping JSON file "
+        "(default: data/xbox_bindings.json). Ignored in keyboard mode. Individual "
+        "entries can still be overridden with XBOX_* env vars.",
+    )
     args = parser.parse_args()
 
     if args.input == "xbox":
@@ -436,7 +455,7 @@ def main():
     if args.input == "keyboard":
         print_key_bindings()
     else:
-        print_xbox_bindings()
+        print_xbox_bindings(args.xbox_bindings)
     try:
         run_parser_loop(
             args.input,
@@ -444,6 +463,7 @@ def main():
             powertrain_channel=args.powertrain_channel,
             comfort_channel=args.comfort_channel,
             can_serial=args.can_serial,
+            xbox_bindings_path=args.xbox_bindings,
         )
     except (KeyboardInterrupt, SystemExit):
         print("\nCancelled by user. Bye!")

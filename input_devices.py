@@ -1,3 +1,4 @@
+import json
 import os
 
 try:
@@ -111,45 +112,146 @@ class KeyboardInputDevice(object):
         }
 
 
-# Tunable Xbox mapping (typical SDL2 Linux Xbox-pad layout). Verify against the real pad
-# with `python input_devices.py` and override via env vars if the driver differs.
-AXIS_STEER = int(os.environ.get("XBOX_AXIS_STEER", 0))
-AXIS_THROTTLE = int(os.environ.get("XBOX_AXIS_THROTTLE", 5))
-AXIS_BRAKE = int(os.environ.get("XBOX_AXIS_BRAKE", 2))
-AXIS_DEADZONE = float(os.environ.get("XBOX_AXIS_DEADZONE", "0.15"))
-HAT_INDEX = int(os.environ.get("XBOX_HAT_INDEX", 0))
+DEFAULT_XBOX_BINDINGS_PATH = "data/xbox_bindings.json"
 
-BTN_DOOR = int(os.environ.get("XBOX_BTN_DOOR", 0))  # A
-BTN_LIGHTS = int(os.environ.get("XBOX_BTN_LIGHTS", 1))  # B
-BTN_MANUAL_GEAR = int(os.environ.get("XBOX_BTN_MANUAL_GEAR", 2))  # X
-BTN_REVERSE = int(os.environ.get("XBOX_BTN_REVERSE", 3))  # Y
-BTN_HAND_BRAKE = int(os.environ.get("XBOX_BTN_HAND_BRAKE", 4))  # LB (held)
-BTN_INTERIOR = int(os.environ.get("XBOX_BTN_INTERIOR", 6))  # Back/View
-BTN_QUIT = int(os.environ.get("XBOX_BTN_QUIT", 7))  # Start
-BTN_HIGH_BEAM = int(os.environ.get("XBOX_BTN_HIGH_BEAM", 9))  # Left stick click
-BTN_SPECIAL_LIGHT = int(os.environ.get("XBOX_BTN_SPECIAL_LIGHT", 10))  # Right stick click
-
-_BUTTON_ACTIONS = {
-    BTN_DOOR: "toggle_door",
-    BTN_LIGHTS: "cycle_lights",
-    BTN_MANUAL_GEAR: "toggle_manual_gear",
-    BTN_REVERSE: "toggle_reverse",
-    BTN_INTERIOR: "toggle_interior_light",
-    BTN_QUIT: "quit",
-    BTN_HIGH_BEAM: "toggle_high_beam",
-    BTN_SPECIAL_LIGHT: "toggle_special_light",
+# Human-readable description of each logical action, shared by the terminal bindings
+# table and the on-screen legend so they can never drift out of sync with each other.
+ACTION_LABELS = {
+    "steer": "Steer",
+    "throttle": "Throttle (hold)",
+    "brake": "Brake (hold)",
+    "hand_brake": "Hand brake (hold)",
+    "toggle_door": "Toggle door open/close",
+    "cycle_lights": "Cycle lights: off → position → low beam → fog",
+    "toggle_manual_gear": "Toggle manual gear shift",
+    "toggle_reverse": "Toggle reverse gear",
+    "toggle_interior_light": "Toggle interior light",
+    "quit": "Quit",
+    "toggle_high_beam": "Toggle high beam",
+    "toggle_special_light": "Toggle special light 1",
+    "gear_up": "Gear up [manual mode]",
+    "gear_down": "Gear down [manual mode]",
+    "toggle_left_blinker": "Left blinker",
+    "toggle_right_blinker": "Right blinker",
 }
+
+# Env var overrides applied on top of the JSON bindings file, kept for backward
+# compatibility with existing scripts/CI that already export these.
+_ENV_OVERRIDES = {
+    "XBOX_AXIS_STEER": (int, ("axes", "steer")),
+    "XBOX_AXIS_THROTTLE": (int, ("axes", "throttle")),
+    "XBOX_AXIS_BRAKE": (int, ("axes", "brake")),
+    "XBOX_AXIS_DEADZONE": (float, ("axes", "deadzone")),
+    "XBOX_HAT_INDEX": (int, ("hat_index",)),
+    "XBOX_BTN_DOOR": (int, ("buttons", "toggle_door")),
+    "XBOX_BTN_LIGHTS": (int, ("buttons", "cycle_lights")),
+    "XBOX_BTN_MANUAL_GEAR": (int, ("buttons", "toggle_manual_gear")),
+    "XBOX_BTN_REVERSE": (int, ("buttons", "toggle_reverse")),
+    "XBOX_BTN_HAND_BRAKE": (int, ("buttons", "hand_brake")),
+    "XBOX_BTN_INTERIOR": (int, ("buttons", "toggle_interior_light")),
+    "XBOX_BTN_QUIT": (int, ("buttons", "quit")),
+    "XBOX_BTN_HIGH_BEAM": (int, ("buttons", "toggle_high_beam")),
+    "XBOX_BTN_SPECIAL_LIGHT": (int, ("buttons", "toggle_special_light")),
+}
+
+
+def load_xbox_bindings(path=None):
+    """Load the Xbox button/axis mapping from a JSON file, with env var overrides.
+
+    Verify indices against the real pad with `python input_devices.py` and either
+    edit the JSON file or override individual entries via the XBOX_* env vars if
+    the driver/layout differs.
+    """
+    path = path or DEFAULT_XBOX_BINDINGS_PATH
+    try:
+        with open(path) as f:
+            bindings = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise RuntimeError(
+            f"Failed to load Xbox bindings from '{path}' ({e}). "
+            "Pass a valid file via --xbox-bindings."
+        )
+
+    for env_var, (cast, keys) in _ENV_OVERRIDES.items():
+        raw = os.environ.get(env_var)
+        if raw is None:
+            continue
+        target = bindings
+        for key in keys[:-1]:
+            target = target[key]
+        target[keys[-1]] = cast(raw)
+
+    seen = {}
+    for action, index in bindings["buttons"].items():
+        if index in seen:
+            raise ValueError(
+                f"Xbox bindings conflict: '{seen[index]}' and '{action}' are both "
+                f"mapped to button {index}"
+            )
+        seen[index] = action
+
+    return bindings
+
+
+def xbox_legend_rows(bindings):
+    """Flatten a loaded bindings dict into display rows shared by the terminal
+    table and the on-screen legend, each carrying enough info to poll live state."""
+    axes = bindings["axes"]
+    rows = [
+        {"descriptor": "Left stick", "action": "steer", "kind": "axis", "index": axes["steer"]},
+        {"descriptor": "Right trigger (RT)", "action": "throttle", "kind": "axis", "index": axes["throttle"]},
+        {"descriptor": "Left trigger (LT)", "action": "brake", "kind": "axis", "index": axes["brake"]},
+    ]
+    for action, index in sorted(bindings["buttons"].items(), key=lambda item: item[1]):
+        rows.append({"descriptor": f"Button {index}", "action": action, "kind": "button", "index": index})
+    for direction, (dx, dy) in (
+        ("up", (0, 1)),
+        ("down", (0, -1)),
+        ("left", (-1, 0)),
+        ("right", (1, 0)),
+    ):
+        action = bindings["dpad"].get(direction)
+        if action is not None:
+            rows.append({
+                "descriptor": f"D-pad {direction}",
+                "action": action,
+                "kind": "hat",
+                "direction": (dx, dy),
+            })
+    for row in rows:
+        row["label"] = ACTION_LABELS.get(row["action"], row["action"].replace("_", " ").title())
+    return rows
 
 
 class XboxInputDevice(object):
     """Reads Xbox controller state/events and exposes them as logical driving actions."""
 
-    def __init__(self, joystick_index=0):
+    def __init__(self, joystick_index=0, bindings_path=None):
+        self.bindings = load_xbox_bindings(bindings_path)
+
         pygame.joystick.init()
         if pygame.joystick.get_count() <= joystick_index:
             raise RuntimeError("No Xbox controller detected")
         self._joystick = pygame.joystick.Joystick(joystick_index)
         self._joystick.init()
+
+        axes = self.bindings["axes"]
+        self._axis_steer = axes["steer"]
+        self._axis_throttle = axes["throttle"]
+        self._axis_brake = axes["brake"]
+        self._axis_deadzone = axes["deadzone"]
+        self._hat_index = self.bindings["hat_index"]
+
+        buttons = self.bindings["buttons"]
+        self._hand_brake_button = buttons.get("hand_brake")
+        self._button_actions = {
+            index: action for action, index in buttons.items() if action != "hand_brake"
+        }
+        self._dpad_actions = dict(self.bindings["dpad"])
+
+    @property
+    def joystick(self):
+        return self._joystick
 
     def poll_actions(self):
         actions = []
@@ -159,37 +261,56 @@ class XboxInputDevice(object):
             elif event.type == pygame.JOYDEVICEREMOVED:
                 actions.append("quit")
             elif event.type == pygame.JOYBUTTONDOWN:
-                action = _BUTTON_ACTIONS.get(event.button)
+                action = self._button_actions.get(event.button)
                 if action is not None:
                     actions.append(action)
-            elif event.type == pygame.JOYHATMOTION and event.hat == HAT_INDEX:
+            elif event.type == pygame.JOYHATMOTION and event.hat == self._hat_index:
                 x, y = event.value
                 if y == 1:
-                    actions.append("gear_up")
+                    action = self._dpad_actions.get("up")
                 elif y == -1:
-                    actions.append("gear_down")
+                    action = self._dpad_actions.get("down")
                 elif x == -1:
-                    actions.append("toggle_left_blinker")
+                    action = self._dpad_actions.get("left")
                 elif x == 1:
-                    actions.append("toggle_right_blinker")
+                    action = self._dpad_actions.get("right")
+                else:
+                    action = None
+                if action is not None:
+                    actions.append(action)
         return actions
 
     def get_axes(self, milliseconds):
         throttle = _apply_deadzone(
-            (self._joystick.get_axis(AXIS_THROTTLE) + 1) / 2, AXIS_DEADZONE
+            (self._joystick.get_axis(self._axis_throttle) + 1) / 2, self._axis_deadzone
         )
         brake = _apply_deadzone(
-            (self._joystick.get_axis(AXIS_BRAKE) + 1) / 2, AXIS_DEADZONE
+            (self._joystick.get_axis(self._axis_brake) + 1) / 2, self._axis_deadzone
         )
-        steer = _apply_deadzone(self._joystick.get_axis(AXIS_STEER), AXIS_DEADZONE)
+        steer = _apply_deadzone(self._joystick.get_axis(self._axis_steer), self._axis_deadzone)
         steer = min(0.7, max(-0.7, steer))
 
         return {
             "throttle": max(0.0, min(1.0, throttle)),
             "brake": max(0.0, min(1.0, brake)),
             "steer": round(steer, 1),
-            "hand_brake": bool(self._joystick.get_button(BTN_HAND_BRAKE)),
+            "hand_brake": bool(
+                self._hand_brake_button is not None
+                and self._joystick.get_button(self._hand_brake_button)
+            ),
         }
+
+    def is_row_active(self, row):
+        """Poll current live state for a legend row built by xbox_legend_rows()."""
+        if row["kind"] == "axis":
+            raw = self._joystick.get_axis(row["index"])
+            value = (raw + 1) / 2 if row["action"] in ("throttle", "brake") else raw
+            return _apply_deadzone(value, self._axis_deadzone) != 0.0
+        if row["kind"] == "button":
+            return bool(self._joystick.get_button(row["index"]))
+        if row["kind"] == "hat":
+            return self._joystick.get_hat(self._hat_index) == row["direction"]
+        return False
 
 
 if __name__ == "__main__":
@@ -207,6 +328,7 @@ if __name__ == "__main__":
     else:
         device = XboxInputDevice()
         print(f"Connected: {device._joystick.get_name()}")
+        print("Loaded bindings:", device.bindings)
         print("Move sticks / triggers / press buttons, Ctrl+C to exit...")
         clock = pygame.time.Clock()
         while True:
