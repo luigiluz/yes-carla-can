@@ -135,6 +135,24 @@ ACTION_LABELS = {
     "toggle_right_blinker": "Right blinker",
 }
 
+# Physical button name for each index, per the typical SDL2 Linux Xbox-pad layout.
+# This is about the *hardware position*, independent of which action a given index
+# is currently bound to — if your pad reports a different layout, check the real
+# indices with `python input_devices.py` and use those names/positions instead.
+BUTTON_ALIASES = {
+    0: "A",
+    1: "B",
+    2: "X",
+    3: "Y",
+    4: "LB",
+    5: "RB",
+    6: "Back",
+    7: "Start",
+    8: "Guide",
+    9: "Left stick click",
+    10: "Right stick click",
+}
+
 # Env var overrides applied on top of the JSON bindings file, kept for backward
 # compatibility with existing scripts/CI that already export these.
 _ENV_OVERRIDES = {
@@ -203,7 +221,9 @@ def xbox_legend_rows(bindings):
         {"descriptor": "Left trigger (LT)", "action": "brake", "kind": "axis", "index": axes["brake"]},
     ]
     for action, index in sorted(bindings["buttons"].items(), key=lambda item: item[1]):
-        rows.append({"descriptor": f"Button {index}", "action": action, "kind": "button", "index": index})
+        name = BUTTON_ALIASES.get(index)
+        descriptor = f"{name} (button {index})" if name else f"Button {index}"
+        rows.append({"descriptor": descriptor, "action": action, "kind": "button", "index": index})
     for direction, (dx, dy) in (
         ("up", (0, 1)),
         ("down", (0, -1)),

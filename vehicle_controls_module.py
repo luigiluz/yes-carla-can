@@ -296,22 +296,22 @@ def run_parser_loop(input_mode, dbc_path="data/carla.dbc", powertrain_channel=No
     else:
         legend_rows = xbox_legend_rows(input_device.bindings)
 
-        ROW_H = 26
-        WIDTH, HEIGHT = 460, 50 + ROW_H * len(legend_rows)
+        ROW_H = 68
+        WIDTH, HEIGHT = 1280, 120 + ROW_H * len(legend_rows)
         screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        font = pygame.font.SysFont(None, 20)
-        title_font = pygame.font.SysFont(None, 24)
+        font = pygame.font.SysFont(None, 48)
+        title_font = pygame.font.SysFont(None, 60)
 
         def draw_xbox_legend():
             screen.fill(BLACK)
             title = title_font.render(f"Xbox: {input_device.joystick.get_name()}", True, WHITE)
-            screen.blit(title, (10, 8))
-            y = 40
+            screen.blit(title, (28, 24))
+            y = 100
             for row in legend_rows:
                 color = GREEN if input_device.is_row_active(row) else GRAY
-                pygame.draw.rect(screen, color, (10, y, WIDTH - 20, ROW_H - 4), border_radius=6)
+                pygame.draw.rect(screen, color, (28, y, WIDTH - 56, ROW_H - 8), border_radius=10)
                 text = font.render(f"{row['descriptor']}: {row['label']}", True, BLACK)
-                screen.blit(text, text.get_rect(center=(WIDTH // 2, y + (ROW_H - 4) // 2)))
+                screen.blit(text, text.get_rect(center=(WIDTH // 2, y + (ROW_H - 8) // 2)))
                 y += ROW_H
             pygame.display.flip()
 
