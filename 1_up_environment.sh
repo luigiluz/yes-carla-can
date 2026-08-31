@@ -15,6 +15,7 @@ CONTROLS_CAN_SERIAL="${CONTROLS_CAN_SERIAL:-}"
 CAN_BITRATE="${CAN_BITRATE:-}"
 CLIENT_RES="${CLIENT_RES:-}"
 CAN_LOG_DIR="${CAN_LOG_DIR:-}"
+INPUT_DEVICE="${INPUT_DEVICE:-keyboard}"
 
 usage() {
     cat <<EOF
@@ -77,6 +78,11 @@ Options:
                                "none" to disable file logging. Useful in --can-mode
                                physical, where candump can't attach to the Intrepid
                                device directly.
+  --input-device <mode>       Input device used to drive the vehicle: keyboard or xbox
+                               (default: keyboard). Passed through to
+                               vehicle_controls_module.py's --input flag; the CARLA client
+                               module is unaffected, it only spectates and applies whatever
+                               control arrives over CAN.
 
 Environment variables:
   CARLA_FOLDER_NAME     Directory where CARLA is installed (default: carla-0-9-15)
@@ -87,6 +93,7 @@ Environment variables:
   VK_ICD_FILENAMES      Force a specific Vulkan ICD file (skips auto-detection)
   CLIENT_RES            Client window/camera resolution, overridden by --res if provided
   CAN_LOG_DIR           Directory for client CAN traffic logs, overridden by --can-log-dir if provided
+  INPUT_DEVICE          keyboard or xbox, overridden by --input-device if provided
 EOF
 }
 
@@ -105,12 +112,18 @@ while [[ $# -gt 0 ]]; do
         --can-bitrate) CAN_BITRATE="$2"; shift 2 ;;
         --res) CLIENT_RES="$2"; shift 2 ;;
         --can-log-dir) CAN_LOG_DIR="$2"; shift 2 ;;
+        --input-device) INPUT_DEVICE="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; usage; exit 1 ;;
     esac
 done
 
 if [[ "${CAN_MODE}" != "virtual" && "${CAN_MODE}" != "physical" ]]; then
     echo "Invalid --can-mode '${CAN_MODE}' (expected 'virtual' or 'physical')"
+    exit 1
+fi
+
+if [[ "${INPUT_DEVICE}" != "keyboard" && "${INPUT_DEVICE}" != "xbox" ]]; then
+    echo "Invalid --input-device '${INPUT_DEVICE}' (expected 'keyboard' or 'xbox')"
     exit 1
 fi
 
@@ -149,7 +162,7 @@ echo "Starting CARLA simulator..."
 ./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality-level=Low -nosound 2>/dev/null &
 
 CLIENT_ARGS=()
-CONTROLS_ARGS=(--dbc "${DBC_PATH}")
+CONTROLS_ARGS=(--dbc "${DBC_PATH}" --input "${INPUT_DEVICE}")
 
 [[ -n "${CLIENT_RES}" ]] && CLIENT_ARGS+=(--res "${CLIENT_RES}")
 [[ -n "${CAN_LOG_DIR}" ]] && CLIENT_ARGS+=(--can-log-dir "${CAN_LOG_DIR}")
