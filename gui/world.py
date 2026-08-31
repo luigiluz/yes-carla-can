@@ -28,6 +28,7 @@ class World(object):
         self.imu_sensor = None
         self.radar_sensor = None
         self.camera_manager = None
+        self.rgb_camera_sensor = None
         self._weather_presets = find_weather_presets()
         self._weather_index = 0
         self._actor_filter = args.filter
@@ -110,6 +111,7 @@ class World(object):
         self.camera_manager = CameraManager(self.player, self.hud, self._gamma)
         self.camera_manager.transform_index = cam_pos_index
         self.camera_manager.set_sensor(cam_index, notify=False)
+        self.rgb_camera_sensor = RGBCameraSensor(self.player, self._gamma)
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
 
@@ -173,6 +175,7 @@ class World(object):
             self.toggle_radar()
         sensors = [
             self.camera_manager.sensor,
+            self.rgb_camera_sensor.sensor if self.rgb_camera_sensor is not None else None,
             self.collision_sensor.sensor,
             self.lane_invasion_sensor.sensor,
             self.gnss_sensor.sensor,

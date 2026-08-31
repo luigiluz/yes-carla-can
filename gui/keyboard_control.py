@@ -29,6 +29,7 @@ try:
         K_f,
         K_g,
         K_h,
+        K_m,  #cameraaa
         K_n,
         K_p,
         K_q,
@@ -101,6 +102,14 @@ class KeyboardControl(object):
                     world.next_weather(reverse=True)
                 elif event.key == K_c:
                     world.next_weather()
+
+
+                elif event.key == K_m:
+                    if hasattr(world, 'rgb_camera_sensor') and world.rgb_camera_sensor is not None:
+                        world.rgb_camera_sensor.toggle_camera()
+                        status = "Ligada" if world.rgb_camera_sensor.enabled else "Desligada"
+                        world.hud.notification(f"Câmera AVTP {status}")
+
                 elif event.key == K_g:
                     world.toggle_radar()
                 elif event.key == K_BACKQUOTE:

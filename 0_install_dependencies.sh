@@ -100,13 +100,22 @@ echo "    conda activate ${CONDA_ENV_NAME}"
 # ------------------------------------------------------------------
 # 4. CARLA
 # ------------------------------------------------------------------
-mkdir -p ${CARLA_FOLDER_NAME}
-cd ${CARLA_FOLDER_NAME}
+# Verifica se a pasta do CARLA já existe antes de baixar
+if [ ! -d "${CARLA_FOLDER_NAME}" ]; then
+    echo "Baixando o CARLA..."
+    mkdir -p ${CARLA_FOLDER_NAME}
+    cd ${CARLA_FOLDER_NAME}
 
-echo "Downloading CARLA..."
-wget https://tiny.carla.org/carla-0-9-15-linux
-
-echo "Extracting CARLA..."
-tar -xzvf carla-0-9-15-linux
-
-echo "CARLA installed successfully!"
+    wget https://tiny.carla.org/carla-0-9-15-linux
+    
+    echo "Extracting CARLA..."
+    tar -xzvf carla-0-9-15-linux
+    
+    # Remove o arquivo compactado para economizar espaço em disco
+    rm carla-0-9-15-linux
+    
+    cd ..
+    echo "CARLA installed successfully!"
+else
+    echo "CARLA já está instalado na pasta '${CARLA_FOLDER_NAME}'. Pulando download."
+fi

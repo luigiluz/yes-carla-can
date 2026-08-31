@@ -36,6 +36,13 @@ class IMUSensor(object):
             max(limits[0], min(limits[1], math.degrees(sensor_data.gyroscope.y))),
             max(limits[0], min(limits[1], math.degrees(sensor_data.gyroscope.z))))
         self.compass = math.degrees(sensor_data.compass)
-        self._can_net.send_imu_accel_msg(*self.accelerometer)
-        self._can_net.send_imu_gyro_msg(*self.gyroscope)
+
+
+        # Proteção: só envia se a tupla realmente tiver 3 elementos
+        if len(self.accelerometer) == 3:
+            self._can_net.send_imu_accel_msg(*self.accelerometer)
+            
+        if len(self.gyroscope) == 3:
+            self._can_net.send_imu_gyro_msg(*self.gyroscope)
+            
         self._can_net.send_imu_compass_msg(self.compass)

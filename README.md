@@ -206,6 +206,9 @@ You can bring the core simulation up with the following command:
 ./1_up_environment.sh
 ```
 
+change AVTP_DIR="/home/ju/virtual-avtp-network"
+
+
 You should see an output like the following, meaning that the environment was properly brought up:
 
 ```bash
@@ -284,7 +287,7 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json ./1_up_environment.sh
 <br>
 
 Internally, `1_up_environment.sh`:
-1. Launches the **CARLA simulator** in headless, low-quality mode (`-RenderOffScreen -quality_level=Low`) to minimise resource usage.
+1. Launches the **CARLA simulator** in headless, low-quality mode (`-RenderOffScreen -quality-level=Low`) to minimise resource usage.
 2. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module.
 3. Waits 5 seconds for CARLA to initialise.
 4. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the vehicle and sensors.
@@ -315,6 +318,7 @@ When you are done, tear everything down cleanly:
 ```bash
 ./2_down_environment.sh
 ```
+change AVTP_DIR="/home/ju/virtual-avtp-network"
 
 The script stops the vehicle controls module, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, and finally removes `vcan0` and unloads the `vcan` kernel module.
 

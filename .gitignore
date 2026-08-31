@@ -177,3 +177,9 @@ pyrightconfig.json
 # Donwloaded CARLA simulator files
 carla-0-9-15/**
 carla-0-9-15.tar.gz
+
+
+_out/
+_out (copy)/
+candump*
+*.pcap

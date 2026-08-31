@@ -57,10 +57,10 @@ def game_loop(args):
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
 
-        # Disable rendering and set fixed time step
+        # Rendering must be enabled for the RGB camera sensor to produce frames.
         sim_world = client.get_world()
         world_settings = sim_world.get_settings()
-        world_settings.no_rendering_mode = True  # Disable rendering
+        world_settings.no_rendering_mode = False
         # fps = 30
         # world_settings.fixed_delta_seconds = round(1/fps, 2) # Set FPS
         sim_world.apply_settings(world_settings)
@@ -107,6 +107,14 @@ def game_loop(args):
             world.tick(clock)
             world.render(display)
             can_display.render(display)
+            # Render PiP last so it sits above all other overlays.
+            if world.rgb_camera_sensor is not None:
+                disp_w, disp_h = display.get_size()
+                pip_w = world.rgb_camera_sensor.IMAGE_WIDTH
+                pip_h = world.rgb_camera_sensor.IMAGE_HEIGHT
+                world.rgb_camera_sensor.render(
+                    display, pos=(disp_w - pip_w - 10, disp_h - pip_h - 10)
+                )
             pygame.display.flip()
 
     finally:
