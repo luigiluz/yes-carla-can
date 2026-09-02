@@ -162,9 +162,12 @@ The considered badges are: Available, Functional, Sustainable, and Reproducible.
 | **libvulkan1** | Linux system package | Vulkan runtime required by the CARLA (UE4) binary, even in headless/offscreen mode |
 | **mesa-vulkan-drivers** | Linux system package | Mesa Vulkan ICD; provides the software Vulkan implementation on machines without a discrete GPU |
 | **curl** | Linux system package | Used by the install script to download the Miniconda installer |
-| **wget** | Linux system package | Used by the install script to download the CARLA binary |
+| **gdown** | see `requirements.txt` | Used by the install script to download the CARLA binary from our Google Drive mirror (default) |
+| **wget** | Linux system package | Used by the install script to download the CARLA binary from the original CARLA URL (only when `DOWNLOAD_FROM_CARLA_GITHUB=true`) |
 
 All Python packages are listed in `requirements.txt`. The full installation is handled automatically by the provided script — see the [Installation](#installation) section.
+
+> **Note:** The original CARLA distribution domain has been unreliable, so by default the install script downloads CARLA from a Google Drive mirror using `gdown` instead. Set `DOWNLOAD_FROM_CARLA_GITHUB=true` to fall back to the original CARLA URL.
 
 ---
 
@@ -192,7 +195,7 @@ What the script does:
 2. Checks for `conda`; if absent, offers to download and install Miniconda automatically.
 3. Creates the `n4s_env` conda environment with Python 3.9 (skips if it already exists).
 4. Installs all Python packages from `requirements.txt` into `n4s_env`.
-5. Downloads and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder.
+5. Downloads (from our Google Drive mirror via `gdown` by default) and extracts CARLA 0.9.15 into the `carla-0-9-15/` folder. Set `DOWNLOAD_FROM_CARLA_GITHUB=true` to download from the original CARLA URL instead.
 
 After this step, all dependencies are installed and the platform is ready to be executed.
 
