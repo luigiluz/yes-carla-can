@@ -11,13 +11,15 @@ What this script does:
   2. Checks for conda/Miniconda and offers to install it if absent
   3. Creates the '${CONDA_ENV_NAME:-n4s_env}' conda environment with Python 3.9
   4. Installs all Python packages from requirements.txt into the conda environment
-  5. Downloads and extracts CARLA 0.9.15 into the '${CARLA_FOLDER_NAME:-carla-0-9-15}/' folder
+  5. Downloads (from Google Drive via gdown by default) and extracts CARLA 0.9.15 into the '${CARLA_FOLDER_NAME:-carla-0-9-15}/' folder
 
 Options:
   -h, --help    Show this help message and exit
 
 Environment variables:
-  CARLA_FOLDER_NAME   Directory to install CARLA into (default: carla-0-9-15)
+  CARLA_FOLDER_NAME            Directory to install CARLA into (default: carla-0-9-15)
+  DOWNLOAD_FROM_CARLA_GITHUB   Set to "true" to download CARLA from the original CARLA
+                                URL instead of our Google Drive mirror (default: false)
 EOF
 }
 
@@ -29,6 +31,8 @@ for arg in "$@"; do
 done
 
 CARLA_FOLDER_NAME="${CARLA_FOLDER_NAME:-carla-0-9-15}"
+DOWNLOAD_FROM_CARLA_GITHUB="${DOWNLOAD_FROM_CARLA_GITHUB:-false}"
+CARLA_GDRIVE_FILE_ID="1mVSuwmbBpHo3igwZt3a11duBAconZjo4"
 CONDA_ENV_NAME="n4s_env"
 PYTHON_VERSION="3.9"
 
@@ -104,7 +108,11 @@ mkdir -p ${CARLA_FOLDER_NAME}
 cd ${CARLA_FOLDER_NAME}
 
 echo "Downloading CARLA..."
-wget https://tiny.carla.org/carla-0-9-15-linux
+if [[ "${DOWNLOAD_FROM_CARLA_GITHUB,,}" == "true" ]]; then
+    wget https://tiny.carla.org/carla-0-9-15-linux
+else
+    conda run --live-stream -n "${CONDA_ENV_NAME}" gdown "https://drive.google.com/uc?id=${CARLA_GDRIVE_FILE_ID}" -O carla-0-9-15-linux
+fi
 
 echo "Extracting CARLA..."
 tar -xzvf carla-0-9-15-linux
