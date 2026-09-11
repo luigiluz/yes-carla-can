@@ -62,10 +62,12 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
             powertrain_display = CANTrafficDisplay(
                 channel=powertrain_channel, passive=True,
                 log_path=log_path("POWERTRAIN", powertrain_channel),
+                accent=(0, 230, 100),
             )
             comfort_display = CANTrafficDisplay(
                 channel=comfort_channel, passive=True,
                 log_path=log_path("COMFORT", comfort_channel),
+                accent=(0, 200, 230),
             )
             shared.add_consumer(shared.powertrain_netid, powertrain_display.feed)
             shared.add_consumer(shared.comfort_netid, comfort_display.feed)
@@ -88,10 +90,12 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
         powertrain_display = CANTrafficDisplay(
             channel=powertrain_channel, serial=serial,
             log_path=log_path("POWERTRAIN", powertrain_channel),
+            accent=(0, 230, 100),
         )
         comfort_display = CANTrafficDisplay(
             channel=comfort_channel, serial=serial,
             log_path=log_path("COMFORT", comfort_channel),
+            accent=(0, 200, 230),
         )
 
     def poll():
