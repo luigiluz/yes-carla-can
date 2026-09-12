@@ -53,6 +53,7 @@ def game_loop(args):
     )
     powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
     powertrain_display, comfort_display = bundle.powertrain_display, bundle.comfort_display
+    ids_panel = bundle.ids_panel
 
     try:
         client = carla.Client(args.host, args.port)
@@ -104,12 +105,13 @@ def game_loop(args):
                 sim_world.tick()
             clock.tick_busy_loop(60)
             bundle.poll()
-            if controller.parse_events(client, world, clock, args.sync, powertrain_ecu, comfort_ecu):
+            if controller.parse_events(client, world, clock, args.sync, powertrain_ecu, comfort_ecu, ids_panel):
                 return
             world.tick(clock)
             world.render(display)
-            powertrain_display.render(display, slot=0)
-            comfort_display.render(display, slot=1)
+            powertrain_display.render(display, slot=0, total_slots=3)
+            comfort_display.render(display, slot=1, total_slots=3)
+            ids_panel.render(display, slot=2, total_slots=3)
             pygame.display.flip()
 
     finally:

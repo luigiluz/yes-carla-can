@@ -6,18 +6,19 @@ from can_network.network import CAN_Network, SharedPhysicalBus
 
 
 class ECUBundle:
-    """The POWERTRAIN/COMFORT ECU pair for one script, plus their traffic displays if
-    requested. Hides whether the two ECUs share one physical bus handle (neovi) or each
-    opened their own (socketcan/vcan) — callers just use .powertrain/.comfort/.poll()/
-    .shutdown() the same way either way.
+    """The POWERTRAIN/COMFORT ECU pair for one script, plus their traffic displays and
+    phase-lock IDS panel if requested. Hides whether the two ECUs share one physical bus
+    handle (neovi) or each opened their own (socketcan/vcan) — callers just use
+    .powertrain/.comfort/.poll()/.shutdown() the same way either way.
     """
 
     def __init__(self, powertrain, comfort, poll_fn, shutdown_fn,
-                 powertrain_display=None, comfort_display=None):
+                 powertrain_display=None, comfort_display=None, ids_panel=None):
         self.powertrain = powertrain
         self.comfort = comfort
         self.powertrain_display = powertrain_display
         self.comfort_display = comfort_display
+        self.ids_panel = ids_panel
         self._poll_fn = poll_fn
         self._shutdown_fn = shutdown_fn
 
@@ -56,7 +57,7 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
         shared.add_consumer(shared.powertrain_netid, powertrain._apply_frame)
         shared.add_consumer(shared.comfort_netid, comfort._apply_frame)
 
-        powertrain_display = comfort_display = None
+        powertrain_display = comfort_display = ids_panel = None
         if with_displays or log_dir:
             from gui import CANTrafficDisplay
             powertrain_display = CANTrafficDisplay(
@@ -72,19 +73,27 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
             shared.add_consumer(shared.powertrain_netid, powertrain_display.feed)
             shared.add_consumer(shared.comfort_netid, comfort_display.feed)
 
+        if with_displays:
+            from gui import IntrusionDetectionPanel
+            ids_panel = IntrusionDetectionPanel(dbc_path, powertrain_channel, comfort_channel, passive=True)
+            shared.add_consumer(shared.powertrain_netid, ids_panel.feed)
+            shared.add_consumer(shared.comfort_netid, ids_panel.feed)
+
         def shutdown():
             shared.shutdown()
             if powertrain_display:
                 powertrain_display.stop()
             if comfort_display:
                 comfort_display.stop()
+            if ids_panel:
+                ids_panel.stop()
 
-        return ECUBundle(powertrain, comfort, shared.poll, shutdown, powertrain_display, comfort_display)
+        return ECUBundle(powertrain, comfort, shared.poll, shutdown, powertrain_display, comfort_display, ids_panel)
 
     powertrain = CAN_Network(dbc_path, channel=powertrain_channel, serial=serial, ecu_bus="POWERTRAIN")
     comfort = CAN_Network(dbc_path, channel=comfort_channel, serial=serial, ecu_bus="COMFORT")
 
-    powertrain_display = comfort_display = None
+    powertrain_display = comfort_display = ids_panel = None
     if with_displays or log_dir:
         from gui import CANTrafficDisplay
         powertrain_display = CANTrafficDisplay(
@@ -98,6 +107,10 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
             accent=(0, 200, 230),
         )
 
+    if with_displays:
+        from gui import IntrusionDetectionPanel
+        ids_panel = IntrusionDetectionPanel(dbc_path, powertrain_channel, comfort_channel, serial=serial)
+
     def poll():
         powertrain.recv_msg()
         comfort.recv_msg()
@@ -109,5 +122,7 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
             powertrain_display.stop()
         if comfort_display:
             comfort_display.stop()
+        if ids_panel:
+            ids_panel.stop()
 
-    return ECUBundle(powertrain, comfort, poll, shutdown, powertrain_display, comfort_display)
+    return ECUBundle(powertrain, comfort, poll, shutdown, powertrain_display, comfort_display, ids_panel)

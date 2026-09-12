@@ -27,6 +27,7 @@ try:
         K_f,
         K_g,
         K_h,
+        K_i,
         K_n,
         K_p,
         K_q,
@@ -64,13 +65,18 @@ class KeyboardControl(object):
         self._steer_cache = 0.0
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
-    def parse_events(self, client, world, clock, sync_mode, powertrain_ecu, comfort_ecu):
+    def parse_events(self, client, world, clock, sync_mode, powertrain_ecu, comfort_ecu, ids_panel=None):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
             elif event.type == pygame.KEYUP:
                 if self._is_quit_shortcut(event.key):
                     return True
+                elif event.key == K_i and ids_panel is not None:
+                    enabled = ids_panel.toggle()
+                    world.hud.notification(
+                        f"Phase-Lock IDS {'Enabled' if enabled else 'Disabled'}"
+                    )
                 elif event.key == K_BACKSPACE:
                     if self._autopilot_enabled:
                         world.player.set_autopilot(False)
