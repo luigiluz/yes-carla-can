@@ -1,11 +1,13 @@
 import argparse
 import can
+import os
 import sys
 import time
 import random
 
 from attacks.reverse_engineering import FEATURE_CAN_ID_PAYLOAD_MAPPER
-from can_network import VCAN_ATTACKER_CHANNEL, CAN_INTERFACE
+from can_network import VCAN_ATTACKER_CHANNEL, bus_kwargs
+from can_network.bus_config import CAN_INTERFACE
 
 # ---------------------------------------------------------------------------
 # Live status display
@@ -100,11 +102,27 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="Perform CAN network attacks.",
-        epilog="Attacker frames are sent on vcan1 (default), which bridges to vcan0 via vxcan/can-gw so candump marks them as 'R' (received) for labeled datasets.",
+        epilog="Virtual mode (default): attacker frames are sent on vcan1 (default channel), which "
+        "bridges to vcan0 via vxcan/can-gw so candump marks them as 'R' (received) for labeled "
+        "datasets. Physical mode: export CAN_INTERFACE=neovi in this shell, then pass --channel "
+        "(e.g. HSCAN) and --can-serial to send attack frames directly onto that Intrepid device's "
+        "channel — no bridge is needed, the attacker is just another node on the same physical bus "
+        "as the target ECU.",
     )
     parser.add_argument("--feature", choices=available_features, help="Feature to attack")
     parser.add_argument("--period", type=float, default=0.1, help="Period between messages in seconds")
-    parser.add_argument("--vcan", default=VCAN_ATTACKER_CHANNEL, help=f"CAN interface for the attacker bus (default: {VCAN_ATTACKER_CHANNEL})")
+    parser.add_argument(
+        "--channel",
+        default=VCAN_ATTACKER_CHANNEL,
+        help=f"CAN channel/interface name for the attacker bus, virtual or physical "
+        f"(default: {VCAN_ATTACKER_CHANNEL})",
+    )
+    parser.add_argument(
+        "--can-serial",
+        default=None,
+        help="Serial number of the physical CAN device (physical mode only; defaults to the "
+        "CAN_SERIAL env var, then auto-detect)",
+    )
 
     args = parser.parse_args()
     if not args.feature:
@@ -112,7 +130,18 @@ def main():
         return
     if args.feature not in available_features:
         print(f"Feature '{args.feature}' is not available. Choose from {available_features}.")
-    bus = can.interface.Bus(channel=args.vcan, interface=CAN_INTERFACE)
+
+    can_serial = args.can_serial or os.environ.get("CAN_SERIAL")
+    if can_serial and CAN_INTERFACE != "neovi":
+        print(
+            f"--can-serial '{can_serial}' was given, but CAN_INTERFACE is '{CAN_INTERFACE}' "
+            f"(not 'neovi'), so it would be silently ignored and this would try (and fail) to "
+            f"open '{args.channel}' as a {CAN_INTERFACE} interface instead. Run "
+            f"'export CAN_INTERFACE=neovi' in this shell before using --can-serial. "
+            f"Run 'python3 list_can_devices.py' to see connected devices and their serials."
+        )
+        return
+    bus = can.interface.Bus(**bus_kwargs(args.channel, serial=args.can_serial))
 
     try:
         if args.feature == "fuzzy":

@@ -1,7 +1,5 @@
 import carla
 
-from can_network.network import CAN_Network
-
 try:
     import pygame
     from pygame.locals import (
@@ -29,6 +27,7 @@ try:
         K_f,
         K_g,
         K_h,
+        K_i,
         K_n,
         K_p,
         K_q,
@@ -46,7 +45,6 @@ class KeyboardControl(object):
     """Class that handles keyboard input."""
 
     def __init__(self, world, start_in_autopilot):
-        self._can = CAN_Network()
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
@@ -67,13 +65,18 @@ class KeyboardControl(object):
         self._steer_cache = 0.0
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
-    def parse_events(self, client, world, clock, sync_mode, can_network):
+    def parse_events(self, client, world, clock, sync_mode, powertrain_ecu, comfort_ecu, ids_panel=None):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
             elif event.type == pygame.KEYUP:
                 if self._is_quit_shortcut(event.key):
                     return True
+                elif event.key == K_i and ids_panel is not None:
+                    enabled = ids_panel.toggle()
+                    world.hud.notification(
+                        f"Phase-Lock IDS {'Enabled' if enabled else 'Disabled'}"
+                    )
                 elif event.key == K_BACKSPACE:
                     if self._autopilot_enabled:
                         world.player.set_autopilot(False)
@@ -202,8 +205,9 @@ class KeyboardControl(object):
 
         if not self._autopilot_enabled:
             if isinstance(self._control, carla.VehicleControl):
-                if can_network.door_change_state:
-                    can_network.door_change_state = False
+                comfort_ecu.recv_msg()  # decodes DOORS/GENERAL_LIGHTS into door_change_state/current_lights
+                if comfort_ecu.door_change_state:
+                    comfort_ecu.door_change_state = False
                     try:
                         if world.doors_are_open:
                             world.hud.notification("Closing Doors")
@@ -230,7 +234,7 @@ class KeyboardControl(object):
                 if self._lights & carla.VehicleLightState.Fog:
                     world.hud.notification("Lights off")
 
-                current_lights = can_network.current_lights
+                current_lights = comfort_ecu.current_lights
 
                 if (
                     current_lights != self._lights
@@ -239,7 +243,7 @@ class KeyboardControl(object):
                     world.player.set_light_state(carla.VehicleLightState(self._lights))
                 ## Apply control
                 if not self._ackermann_enabled:
-                    received_controls = can_network.recv_msg()
+                    received_controls = powertrain_ecu.recv_msg()
                     world.player.apply_control(received_controls)
                 else:
                     world.player.apply_ackermann_control(self._ackermann_control)

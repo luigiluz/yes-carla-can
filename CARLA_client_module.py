@@ -29,29 +29,31 @@ try:
 except IndexError:
     pass
 
-import tkinter as tk
-
 import carla
 import pygame
 
-from can_network.network import CAN_Network, VCAN_CHANNEL
-from gui import CANTrafficDisplay, HUD, KeyboardControl, World
+import can_network
+from can_network.network import VCAN_CHANNEL
+from gui import HUD, KeyboardControl, World
 
 
 def game_loop(args):
     pygame.init()
     pygame.font.init()
 
-    root = tk.Tk()
-    width = root.winfo_screenwidth()
-    height = root.winfo_screenheight()
-    root.destroy()
+    width, height = args.width, args.height
     print(f"width: {width}, height: {height}")
 
     world = None
     original_settings = None
-    can_bus = CAN_Network(channel=args.vcan)
-    can_display = CANTrafficDisplay(channel=args.vcan)
+    bundle = can_network.open_ecu_bundle(
+        "data/carla.dbc", args.powertrain_channel, args.comfort_channel,
+        serial=args.can_serial, with_displays=True,
+        log_dir=None if args.can_log_dir.lower() in ("", "none") else args.can_log_dir,
+    )
+    powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
+    powertrain_display, comfort_display = bundle.powertrain_display, bundle.comfort_display
+    ids_panel = bundle.ids_panel
 
     try:
         client = carla.Client(args.host, args.port)
@@ -83,13 +85,13 @@ def game_loop(args):
             )
 
         display = pygame.display.set_mode(
-            (width / 2, height / 2), pygame.HWSURFACE | pygame.DOUBLEBUF
+            (width, height), pygame.HWSURFACE | pygame.DOUBLEBUF
         )
         display.fill((0, 0, 0))
         pygame.display.flip()
 
-        hud = HUD(width / 2, height / 2)
-        world = World(sim_world, hud, args, can_bus)
+        hud = HUD(width, height)
+        world = World(sim_world, hud, args, comfort_ecu)
         controller = KeyboardControl(world, args.autopilot)
 
         if args.sync:
@@ -102,11 +104,14 @@ def game_loop(args):
             if args.sync:
                 sim_world.tick()
             clock.tick_busy_loop(60)
-            if controller.parse_events(client, world, clock, args.sync, can_bus):
+            bundle.poll()
+            if controller.parse_events(client, world, clock, args.sync, powertrain_ecu, comfort_ecu, ids_panel):
                 return
             world.tick(clock)
             world.render(display)
-            can_display.render(display)
+            powertrain_display.render(display, slot=0, total_slots=3)
+            comfort_display.render(display, slot=1, total_slots=3)
+            ids_panel.render(display, slot=2, total_slots=3)
             pygame.display.flip()
 
     finally:
@@ -119,8 +124,7 @@ def game_loop(args):
             except Exception:
                 pass
 
-        can_display.stop()
-        can_bus.bus.shutdown()
+        bundle.shutdown()
 
         try:
             if original_settings:
@@ -166,8 +170,8 @@ def main():
     argparser.add_argument(
         "--res",
         metavar="WIDTHxHEIGHT",
-        default="1280x720",
-        help="window resolution (default: 1280x720)",
+        default="1920x1080",
+        help="window resolution (default: 1920x1080)",
     )
     argparser.add_argument(
         "--filter",
@@ -197,9 +201,29 @@ def main():
         "--sync", action="store_true", help="Activate synchronous mode execution"
     )
     argparser.add_argument(
-        "--vcan",
+        "--powertrain-channel",
         default=VCAN_CHANNEL,
-        help=f"Virtual CAN interface name (default: {VCAN_CHANNEL})",
+        help=f"CAN channel/interface name for the POWERTRAIN-bus ECU, virtual or physical "
+        f"(default: {VCAN_CHANNEL})",
+    )
+    argparser.add_argument(
+        "--comfort-channel",
+        default=VCAN_CHANNEL,
+        help=f"CAN channel/interface name for the COMFORT-bus ECU, virtual or physical "
+        f"(default: {VCAN_CHANNEL})",
+    )
+    argparser.add_argument(
+        "--can-serial",
+        default=None,
+        help="Serial number of the physical CAN device shared by both ECUs (physical mode "
+        "only; defaults to the CAN_SERIAL env var, then auto-detect)",
+    )
+    argparser.add_argument(
+        "--can-log-dir",
+        default="traffic_logs",
+        help="Directory to write candump-format .log files of everything shown in the "
+        "POWERTRAIN/COMFORT traffic panels (default: traffic_logs). Pass \"none\" to "
+        "disable file logging.",
     )
     args = argparser.parse_args()
 

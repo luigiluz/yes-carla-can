@@ -1,32 +1,87 @@
+import time
+
 import can
 import carla
 
-from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
+from can_network.bus_config import VCAN_CHANNEL, bus_kwargs
+from can_network.dbc import (
+    load_and_validate,
+    REQUIRED_SIGNALS,
+    LIGHT_SIGNALS,
+    SENSOR_MESSAGES,
+    SUPPORTED_MESSAGES,
+    BUS_ASSIGNMENT,
+    ECU_BUSES,
+)
 
-VCAN_CHANNEL = "vcan0"
-VCAN_ATTACKER_CHANNEL = "vcan1"
-CAN_INTERFACE = "socketcan"
+SLOW_SEND_WARN_MS = 50
 
 
 class CAN_Network(object):
-    """Interface to the virtual CAN bus backed by a DBC message schema."""
+    """Interface to one CAN bus (virtual or physical) backed by a DBC message schema.
 
-    door_change_state = False
-    current_lights = carla.VehicleLightState.NONE
+    `ecu_bus`, when given, scopes this instance to a single ECU bus role (e.g.
+    "POWERTRAIN" or "COMFORT" — see can_network.dbc.BUS_ASSIGNMENT): only messages
+    assigned to that bus are sent/decoded, and sending a message assigned to a
+    different bus raises, the same way a real ECU's send table would reject it.
+    Leave it None (default) for the unscoped, single-bus behavior.
+    """
 
-    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL):
-        self.bus = can.ThreadSafeBus(
-            interface=CAN_INTERFACE, channel=channel, receive_own_messages=True
-        )
+    def __init__(self, dbc_path="data/carla.dbc", channel=VCAN_CHANNEL, serial=None, ecu_bus=None,
+                 bus=None, send_channel=None):
+        if bus is not None:
+            # Attach to an already-open bus (e.g. a SharedPhysicalBus) instead of opening
+            # our own — required on the neovi backend, where a physical device can only be
+            # opened once per process. recv_msg() becomes a no-op in this mode; draining
+            # happens centrally via whatever owns the shared bus (see SharedPhysicalBus).
+            self.bus = bus
+            self._owns_bus = False
+        else:
+            self.bus = can.ThreadSafeBus(**bus_kwargs(channel, serial=serial))
+            print(f"[CAN] Bus opened: {self.bus.channel_info}")
+            self._owns_bus = True
+        self._send_channel = send_channel
         self.recvd_controls = carla.VehicleControl()
+        self.door_change_state = False
+        self.current_lights = carla.VehicleLightState.NONE
         self.db, self.cycle_times = load_and_validate(dbc_path)
+
+        if ecu_bus is not None and ecu_bus not in ECU_BUSES:
+            raise ValueError(f"[CAN] Unknown ecu_bus '{ecu_bus}', expected one of {sorted(ECU_BUSES)}")
+        self.ecu_bus = ecu_bus
+        self.messages = (
+            frozenset(n for n in SUPPORTED_MESSAGES if BUS_ASSIGNMENT.get(n) == ecu_bus)
+            if ecu_bus is not None
+            else frozenset(SUPPORTED_MESSAGES)
+        )
+        self.cycle_times = {n: t for n, t in self.cycle_times.items() if n in self.messages}
 
     # ------------------------------------------------------------------
     # Internal helper
     # ------------------------------------------------------------------
 
+    def _send(self, msg, label):
+        # timeout=0 is required, not cosmetic: NeoViBus repurposes `timeout` for a
+        # device-ACK-wait, and treats the generic BusABC default (None) as "wait
+        # forever" — socketcan treats None/0 identically, so this is a no-op there.
+        if self._send_channel is not None:
+            msg.channel = self._send_channel
+        start = time.monotonic()
+        self.bus.send(msg, timeout=0)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        if elapsed_ms > SLOW_SEND_WARN_MS:
+            print(f"[CAN] WARNING: {label} send took {elapsed_ms:.0f}ms (id=0x{msg.arbitration_id:X})")
+
+    def _check_bus(self, message_name):
+        if message_name not in self.messages:
+            raise ValueError(
+                f"[CAN] '{message_name}' is not on this ECU's bus "
+                f"(ecu_bus={self.ecu_bus!r}); wrong ECU instance for this message"
+            )
+
     def _build_msg(self, message_name, value) -> can.Message:
         """Encode a single-signal CAN message from the DBC and return a can.Message ready to send."""
+        self._check_bus(message_name)
         try:
             dbc_msg = self.db.get_message_by_name(message_name)
         except KeyError:
@@ -44,6 +99,7 @@ class CAN_Network(object):
 
     def _build_sensor_msg(self, message_name, signals_dict) -> can.Message:
         """Encode a multi-signal CAN message from the DBC and return a can.Message ready to send."""
+        self._check_bus(message_name)
         try:
             dbc_msg = self.db.get_message_by_name(message_name)
         except KeyError:
@@ -63,38 +119,39 @@ class CAN_Network(object):
     # ------------------------------------------------------------------
 
     def send_switch_door_state_msg(self):
-        self.bus.send(self._build_msg("DOORS", True))
+        self._send(self._build_msg("DOORS", True), "DOORS")
 
     def send_current_lights_msg(self, lights):
+        self._check_bus("GENERAL_LIGHTS")
         dbc_msg = self.db.get_message_by_name("GENERAL_LIGHTS")
         lights_int = int(lights)
         signal_dict = {sig: int(bool(lights_int & flag)) for sig, flag in LIGHT_SIGNALS.items()}
-        self.bus.send(can.Message(
+        self._send(can.Message(
             arbitration_id=dbc_msg.frame_id,
             data=dbc_msg.encode(signal_dict),
             is_extended_id=dbc_msg.is_extended_frame,
-        ))
+        ), "GENERAL_LIGHTS")
 
     def send_throttle_msg(self, controls):
-        self.bus.send(self._build_msg("THROTTLE", int(controls.throttle * 255)))
+        self._send(self._build_msg("THROTTLE", int(controls.throttle * 255)), "THROTTLE")
 
     def send_steer_msg(self, controls):
-        self.bus.send(self._build_msg("STEER", int((controls.steer + 1) / 2 * 255)))
+        self._send(self._build_msg("STEER", int((controls.steer + 1) / 2 * 255)), "STEER")
 
     def send_brake_msg(self, controls):
-        self.bus.send(self._build_msg("BRAKE", int(controls.brake * 255)))
+        self._send(self._build_msg("BRAKE", int(controls.brake * 255)), "BRAKE")
 
     def send_hand_brake_msg(self, controls):
-        self.bus.send(self._build_msg("HAND_BRAKE", int(controls.hand_brake)))
+        self._send(self._build_msg("HAND_BRAKE", int(controls.hand_brake)), "HAND_BRAKE")
 
     def send_reverse_msg(self, controls):
-        self.bus.send(self._build_msg("REVERSE", int(controls.reverse)))
+        self._send(self._build_msg("REVERSE", int(controls.reverse)), "REVERSE")
 
     def send_manual_transmission_msg(self, controls):
-        self.bus.send(self._build_msg("MANUAL_TRANSMISSION", int(controls.manual_gear_shift)))
+        self._send(self._build_msg("MANUAL_TRANSMISSION", int(controls.manual_gear_shift)), "MANUAL_TRANSMISSION")
 
     def send_gear_msg(self, controls):
-        self.bus.send(self._build_msg("GEAR", int(controls.gear)))
+        self._send(self._build_msg("GEAR", int(controls.gear)), "GEAR")
 
     def send_autopilot_msg(self, controls):
         # controls.autopilot is not a standard VehicleControl field;
@@ -106,47 +163,47 @@ class CAN_Network(object):
     # ------------------------------------------------------------------
 
     def send_gnss_msg(self, lat, lon):
-        self.bus.send(self._build_sensor_msg("GNSS", {
+        self._send(self._build_sensor_msg("GNSS", {
             "GNSS_LAT_signal": lat,
             "GNSS_LON_signal": lon,
-        }))
+        }), "GNSS")
 
     def send_collision_msg(self, intensity):
-        self.bus.send(self._build_sensor_msg("COLLISION", {
+        self._send(self._build_sensor_msg("COLLISION", {
             "COLLISION_INTENSITY_signal": min(intensity, 6553.5),
-        }))
+        }), "COLLISION")
 
     def send_lane_invasion_msg(self, bitmask):
-        self.bus.send(self._build_sensor_msg("LANE_INVASION", {
+        self._send(self._build_sensor_msg("LANE_INVASION", {
             "LANE_INVASION_TYPE_signal": bitmask,
-        }))
+        }), "LANE_INVASION")
 
     def send_imu_accel_msg(self, x, y, z):
-        self.bus.send(self._build_sensor_msg("IMU_ACCEL", {
+        self._send(self._build_sensor_msg("IMU_ACCEL", {
             "IMU_ACCEL_X_signal": x,
             "IMU_ACCEL_Y_signal": y,
             "IMU_ACCEL_Z_signal": z,
-        }))
+        }), "IMU_ACCEL")
 
     def send_imu_gyro_msg(self, x, y, z):
-        self.bus.send(self._build_sensor_msg("IMU_GYRO", {
+        self._send(self._build_sensor_msg("IMU_GYRO", {
             "IMU_GYRO_X_signal": x,
             "IMU_GYRO_Y_signal": y,
             "IMU_GYRO_Z_signal": z,
-        }))
+        }), "IMU_GYRO")
 
     def send_imu_compass_msg(self, compass):
-        self.bus.send(self._build_sensor_msg("IMU_COMPASS", {
+        self._send(self._build_sensor_msg("IMU_COMPASS", {
             "IMU_COMPASS_signal": compass,
-        }))
+        }), "IMU_COMPASS")
 
     def send_radar_target_msg(self, velocity, azimuth, altitude, depth):
-        self.bus.send(self._build_sensor_msg("RADAR_TARGET", {
+        self._send(self._build_sensor_msg("RADAR_TARGET", {
             "RADAR_VEL_signal":   velocity,
             "RADAR_AZI_signal":   azimuth,
             "RADAR_ALT_signal":   altitude,
             "RADAR_DEPTH_signal": depth,
-        }))
+        }), "RADAR_TARGET")
 
     def send_msg(self, controls):
         """Convenience method — sends all messages at once (bypasses per-message timing)."""
@@ -166,63 +223,114 @@ class CAN_Network(object):
         self.door_change_state = not self.door_change_state
         return self.door_change_state
 
+    def _apply_frame(self, recv_msg):
+        """Decode one raw can.Message and, if it's on this ECU's bus, apply it to
+        recvd_controls/door_change_state/current_lights. Messages on another bus are
+        silently skipped (see the ecu_bus filter in __init__)."""
+        try:
+            dbc_msg = self.db.get_message_by_frame_id(recv_msg.arbitration_id)
+        except KeyError:
+            print(f"[CAN] INFO: Received unknown arbitration_id 0x{recv_msg.arbitration_id:X}, skipping")
+            return
+
+        name = dbc_msg.name
+        if name not in self.messages:
+            return
+
+        data = self.db.decode_message(recv_msg.arbitration_id, recv_msg.data)
+
+        if name == "THROTTLE":
+            self.recvd_controls.throttle = data[REQUIRED_SIGNALS["THROTTLE"]] / 255.0
+
+        elif name == "STEER":
+            self.recvd_controls.steer = (data[REQUIRED_SIGNALS["STEER"]] / 255.0) * 2 - 1
+
+        elif name == "BRAKE":
+            self.recvd_controls.brake = data[REQUIRED_SIGNALS["BRAKE"]] / 255.0
+
+        elif name == "HAND_BRAKE":
+            self.recvd_controls.hand_brake = bool(data[REQUIRED_SIGNALS["HAND_BRAKE"]])
+
+        elif name == "REVERSE":
+            self.recvd_controls.reverse = bool(data[REQUIRED_SIGNALS["REVERSE"]])
+
+        elif name == "MANUAL_TRANSMISSION":
+            self.recvd_controls.manual_gear_shift = bool(data[REQUIRED_SIGNALS["MANUAL_TRANSMISSION"]])
+
+        elif name == "GEAR":
+            self.recvd_controls.gear = int(data[REQUIRED_SIGNALS["GEAR"]])
+
+        elif name == "DOORS":
+            if data[REQUIRED_SIGNALS["DOORS"]]:
+                print(data)
+                self.door_change_state = True
+
+        elif name == "GENERAL_LIGHTS":
+            lights_int = 0
+            for sig, flag in LIGHT_SIGNALS.items():
+                if data.get(sig, 0):
+                    lights_int |= flag
+            self.current_lights = carla.VehicleLightState(lights_int)
+
+        elif name in SENSOR_MESSAGES:
+            pass  # sensor telemetry — published by the CARLA client; no actuation here
+
     def recv_msg(self):
-        """Read all pending CAN frames and update recvd_controls accordingly."""
+        """Read all pending CAN frames and update recvd_controls accordingly.
+
+        No-op (beyond returning the current recvd_controls) when this ECU is attached to
+        a shared bus (bus= was given, e.g. via SharedPhysicalBus) — draining that bus is
+        centralized elsewhere, since only one consumer may call .recv() on it.
+        """
+        if not self._owns_bus:
+            return self.recvd_controls
         try:
             recv_msg = self.bus.recv(timeout=0)
         except can.CanOperationError:
             return self.recvd_controls
         while recv_msg is not None:
-            data = self.db.decode_message(recv_msg.arbitration_id, recv_msg.data)
-
-            try:
-                dbc_msg = self.db.get_message_by_frame_id(recv_msg.arbitration_id)
-            except KeyError:
-                print(f"[CAN] INFO: Received unknown arbitration_id 0x{recv_msg.arbitration_id:X}, skipping")
-                recv_msg = self.bus.recv(timeout=0)
-                continue
-
-            name = dbc_msg.name
-
-            if name == "THROTTLE":
-                self.recvd_controls.throttle = data[REQUIRED_SIGNALS["THROTTLE"]] / 255.0
-
-            elif name == "STEER":
-                self.recvd_controls.steer = (data[REQUIRED_SIGNALS["STEER"]] / 255.0) * 2 - 1
-
-            elif name == "BRAKE":
-                self.recvd_controls.brake = data[REQUIRED_SIGNALS["BRAKE"]] / 255.0
-
-            elif name == "HAND_BRAKE":
-                self.recvd_controls.hand_brake = bool(data[REQUIRED_SIGNALS["HAND_BRAKE"]])
-
-            elif name == "REVERSE":
-                self.recvd_controls.reverse = bool(data[REQUIRED_SIGNALS["REVERSE"]])
-
-            elif name == "MANUAL_TRANSMISSION":
-                self.recvd_controls.manual_gear_shift = bool(data[REQUIRED_SIGNALS["MANUAL_TRANSMISSION"]])
-
-            elif name == "GEAR":
-                self.recvd_controls.gear = int(data[REQUIRED_SIGNALS["GEAR"]])
-
-            elif name == "DOORS":
-                if data[REQUIRED_SIGNALS["DOORS"]]:
-                    print(data)
-                    self.door_change_state = True
-
-            elif name == "GENERAL_LIGHTS":
-                lights_int = 0
-                for sig, flag in LIGHT_SIGNALS.items():
-                    if data.get(sig, 0):
-                        lights_int |= flag
-                self.current_lights = carla.VehicleLightState(lights_int)
-
-            elif name in SENSOR_MESSAGES:
-                pass  # sensor telemetry — published by the CARLA client; no actuation here
-
+            self._apply_frame(recv_msg)
             try:
                 recv_msg = self.bus.recv(timeout=0)
             except can.CanOperationError:
                 break
 
         return self.recvd_controls
+
+
+class SharedPhysicalBus:
+    """One physical neovi device, opened once, carrying two logical CAN channels
+    (e.g. HSCAN/HSCAN2). The ics driver can only open a given device once per process,
+    so the POWERTRAIN/COMFORT ECUs (and any traffic-display sniffers) for one physical
+    device must all read/write through this single bus instead of each opening their own.
+
+    `poll()` is the only place that calls `.recv()` on the underlying bus, and dispatches
+    each frame to whichever registered consumer's netid matches `raw.channel`.
+    """
+
+    def __init__(self, powertrain_channel, comfort_channel, serial=None):
+        from can.interfaces.ics_neovi.neovi_bus import NeoViBus
+
+        self.bus = can.ThreadSafeBus(**bus_kwargs(f"{powertrain_channel},{comfort_channel}", serial=serial))
+        print(f"[CAN] Shared bus opened: {self.bus.channel_info}")
+        self.powertrain_netid = NeoViBus.channel_to_netid(powertrain_channel)
+        self.comfort_netid = NeoViBus.channel_to_netid(comfort_channel)
+        self._consumers = []  # list of (netid, callback(raw_msg))
+
+    def add_consumer(self, netid, callback):
+        self._consumers.append((netid, callback))
+
+    def poll(self):
+        while True:
+            try:
+                raw = self.bus.recv(timeout=0)
+            except can.CanOperationError:
+                break
+            if raw is None:
+                break
+            for netid, callback in self._consumers:
+                if raw.channel == netid:
+                    callback(raw)
+
+    def shutdown(self):
+        self.bus.shutdown()

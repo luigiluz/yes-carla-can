@@ -23,6 +23,7 @@ diskcache==5.6.3
 exceptiongroup==1.2.2
 executing==2.1.0
 fastjsonschema==2.20.0
+filelock==3.16.1
 Flask==3.0.3
 fonttools==4.54.1
 gdown
@@ -66,6 +67,7 @@ pyparsing==3.1.4
 pyquaternion==0.9.9
 pyserial==3.5
 python-can==4.6.1
+python-ics
 python-dateutil==2.9.0.post0
 pytz==2024.2
 PyYAML==6.0.2
