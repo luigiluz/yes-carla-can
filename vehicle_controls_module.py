@@ -7,7 +7,7 @@ import carla
 
 import can_network
 from can_network import VCAN_CHANNEL
-from can_network.dbc import MESSAGE_SENDERS
+from can_network.dbc import MESSAGE_SENDERS, SENSOR_MESSAGES
 
 try:
     import pygame
@@ -60,7 +60,7 @@ class KeyboardSenderControl(object):
         self._msg_timers = {
             name: [interval, now]
             for name, interval in can_net.cycle_times.items()
-            if name in MESSAGE_SENDERS
+            if name in MESSAGE_SENDERS and name not in SENSOR_MESSAGES
         }
 
     # ------------------------------------------------------------------

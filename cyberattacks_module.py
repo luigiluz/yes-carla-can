@@ -93,8 +93,7 @@ def spoofing_attacks_func(bus, feature: str, period: float):
         time.sleep(period)
 
 
-def main():
-    print("CAN network attacks CLI")
+def parse_args(argv=None):
     spoofing_attacks = list(FEATURE_CAN_ID_PAYLOAD_MAPPER.keys())
     available_features = [*spoofing_attacks, "fuzzy", "denial_of_service"]
 
@@ -106,7 +105,13 @@ def main():
     parser.add_argument("--period", type=float, default=0.1, help="Period between messages in seconds")
     parser.add_argument("--vcan", default=VCAN_ATTACKER_CHANNEL, help=f"CAN interface for the attacker bus (default: {VCAN_ATTACKER_CHANNEL})")
 
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main():
+    print("CAN network attacks CLI")
+    args = parse_args()
+    available_features = [*FEATURE_CAN_ID_PAYLOAD_MAPPER.keys(), "fuzzy", "denial_of_service"]
     if not args.feature:
         print("No feature specified. Use --feature to select a feature.")
         return
