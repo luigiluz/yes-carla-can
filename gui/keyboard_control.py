@@ -11,6 +11,7 @@ try:
         K_EQUALS,
         K_ESCAPE,
         K_F1,
+        K_F11,
         K_LEFT,
         K_MINUS,
         K_RIGHT,
@@ -86,6 +87,8 @@ class KeyboardControl(object):
                         world.restart()
                 elif event.key == K_F1:
                     world.hud.toggle_info()
+                elif event.key == K_F11:
+                    pygame.display.toggle_fullscreen()
                 elif event.key == K_v and pygame.key.get_mods() & KMOD_SHIFT:
                     world.next_map_layer(reverse=True)
                 elif event.key == K_v:
