@@ -39,6 +39,7 @@ Use ARROWS or WASD keys for control.
     CTRL + -     : decrements the start time of the replay by 1 second (+SHIFT = 10 seconds)
 
     F1           : toggle HUD
+    F11          : toggle fullscreen
     H/?          : toggle help
     ESC          : quit
 """

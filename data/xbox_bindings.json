@@ -1,0 +1,21 @@
+{
+  "axes": {"steer": 0, "throttle": 5, "brake": 2, "deadzone": 0.15},
+  "hat_index": 0,
+  "buttons": {
+    "toggle_door": 0,
+    "cycle_lights": 1,
+    "toggle_manual_gear": 2,
+    "toggle_reverse": 3,
+    "hand_brake": 4,
+    "toggle_interior_light": 6,
+    "quit": 7,
+    "toggle_high_beam": 9,
+    "toggle_special_light": 10
+  },
+  "dpad": {
+    "up": "gear_up",
+    "down": "gear_down",
+    "left": "toggle_left_blinker",
+    "right": "toggle_right_blinker"
+  }
+}

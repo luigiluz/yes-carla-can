@@ -2,7 +2,7 @@
 
 usage() {
     cat <<EOF
-Usage: $0 [-h|--help]
+Usage: $0 [-h|--help] [--can-mode virtual|physical]
 
 Tear down the "Yes, CARLA CAN" simulation environment.
 
@@ -10,22 +10,27 @@ What this script does:
   1. Stops the vehicle controls module
   2. Stops the CARLA client module (waits up to 10 seconds for a clean exit)
   3. Stops the CARLA simulator
-  4. Removes the vxcan bridge (can-gw routes, vcan1)
-  5. Removes the virtual CAN bus (vcan0) and unloads the vcan/can-gw kernel modules
+  4. In --can-mode virtual (default): removes the vxcan bridge (can-gw routes, vcan1) and
+     the virtual CAN bus (vcan0), unloads the vcan/can-gw kernel modules
+  5. In --can-mode physical: no CAN teardown needed (nothing was created)
 
 Options:
-  -h, --help    Show this help message and exit
+  -h, --help           Show this help message and exit
+  --can-mode <mode>    virtual or physical (default: virtual) — must match the mode used
+                       with 1_up_environment.sh
 EOF
 }
 
-for arg in "$@"; do
-    case "$arg" in
+CAN_MODE="${CAN_MODE:-virtual}"
+VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         -h|--help) usage; exit 0 ;;
-        *) echo "Unknown argument: $arg"; usage; exit 1 ;;
+        --can-mode) CAN_MODE="$2"; shift 2 ;;
+        *) echo "Unknown argument: $1"; usage; exit 1 ;;
     esac
 done
-
-VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
 
 # Stop vehicle controls module
 echo "Stopping vehicle controls module..."
@@ -70,15 +75,19 @@ else
     echo "CARLA process not found."
 fi
 
-# Bring virtual CAN bus down
-echo "Bringing virtual CAN bus down..."
-sudo cangw -D -s vcan1 -d "${VCAN_INTERFACE}" -e 2>/dev/null || true
-sudo cangw -D -s "${VCAN_INTERFACE}" -d vcan1 -e 2>/dev/null || true
-sudo ip link set down vcan1 2>/dev/null || true
-sudo ip link delete vcan1 2>/dev/null || true
-sudo ip link set down "${VCAN_INTERFACE}"
-sudo ip link delete "${VCAN_INTERFACE}"
-sudo modprobe -r can-gw 2>/dev/null || true
-sudo modprobe -r vcan
+if [[ "${CAN_MODE}" == "virtual" ]]; then
+    # Bring virtual CAN bus down
+    echo "Bringing virtual CAN bus down..."
+    sudo cangw -D -s vcan1 -d "${VCAN_INTERFACE}" -e 2>/dev/null || true
+    sudo cangw -D -s "${VCAN_INTERFACE}" -d vcan1 -e 2>/dev/null || true
+    sudo ip link set down vcan1 2>/dev/null || true
+    sudo ip link delete vcan1 2>/dev/null || true
+    sudo ip link set down "${VCAN_INTERFACE}"
+    sudo ip link delete "${VCAN_INTERFACE}"
+    sudo modprobe -r can-gw 2>/dev/null || true
+    sudo modprobe -r vcan
+else
+    echo "Physical CAN mode: nothing to tear down."
+fi
 
 echo "Environment is down!"
