@@ -12,19 +12,16 @@ import pygame
 import carla
 import av
 
-PATH_AVTP = "/home/ju/virtual-avtp-network"  # Coloque o caminho absoluto da sua pasta do AVTP aqui
-if PATH_AVTP not in sys.path:
-    sys.path.append(PATH_AVTP)
 
-
-import avtp as avtp_lib
-from scapy.all import sendp, get_if_hwaddr
+from avtp_network import avtp as avtp_lib
+from scapy.all import get_if_hwaddr
+from fractions import Fraction
 
 class MPEGTSStreamEncoder:
     """
     Encoder MPEG-TS profissional baseado no FFmpeg (PyAV) para AVTP IEC 61883-4.
     Converte frames de imagens em um fluxo de vídeo H.264 empacotado em 
-    blocos MPEG-TS de 192 bytes (4B SPH Timestamp + 188B TS Packet).
+    blocos MPEG-TS de 192 bytes (4B SPH Timestamp + 188B TS Packet) configurado com injeção contínua de SPS/PPS.
     """
     def __init__(self, width=470, height=200, fps=30, pid=0x18):
         self.width = width
@@ -32,30 +29,47 @@ class MPEGTSStreamEncoder:
         self.fps = fps
         self.pid = pid
 
-        # Prepara o container de saída em memória (MPEG-TS)
-        self.output_buffer = io.BytesIO()
-        self.container = av.open(self.output_buffer, mode="w", format="mpegts")
+        self.pts_counter = 0
 
-        # Cria a stream de vídeo H.264 dentro do MPEG-TS
-        self.stream = self.container.add_stream("h264", rate=self.fps)
+        # 1. Buffer em memória onde o PyAV/FFmpeg irá escrever os blocos MPEG-TS
+        self.output_buffer = io.BytesIO()
+
+        # 2. Instancia o container MPEG-TS uma única vez
+        self.container = av.open(
+            self.output_buffer,
+            mode="w",
+            format="mpegts",
+            options={"mpegts_flags": "resend_headers"}
+        )
+
+
+        # 4. Configurações de ultra-baixa latência
+        codec_options = {
+            "tune": "zerolatency",
+            "preset": "ultrafast",
+            "g": "5",                                           # Keyframe (I-frame) a cada 5 frames para recuperação rápida
+            "keyint_min": "5",                                  # Intervalo MÍNIMO de 5 frames
+            "sc_threshold": "0",                                # Desativa detecção de cena para manter Keyframes fixos
+            "x264-params": "repeat-headers=1:aud=1:force-cfr=1" # Força injeção de SPS/PPS + Annex B
+        }
+
+        # 3. Cria a stream H.264 uma única vez
+        self.stream = self.container.add_stream("h264", rate=self.fps, options=codec_options)
         self.stream.width = self.width
         self.stream.height = self.height
         self.stream.pix_fmt = "yuv420p"
-        
-        # Opções de baixíssima latência (cruciais para tempo real/câmera)
-        self.stream.options = {
-            "tune": "zerolatency",
-            "preset": "ultrafast",
-            "g": "5"  # Gera GOP curto (Keyframe a cada 5 frames)
-        }
-
-        self.pts_counter = 0
 
     def encode_frame_to_ts_blocks(self, bgra_array):
         """
         Recebe a matriz BGRA (H, W, 4) do CARLA, codifica via FFmpeg e 
         retorna os blocos de 192 bytes prontos para o AVTP.
+        
         """
+        # Limpa o buffer de saída mantendo a mesma instância em memória
+        self.output_buffer.seek(0)
+        self.output_buffer.truncate(0)
+
+
         # 1. Converte a matriz BGRA para RGB (elimina o canal Alpha)
         rgb_array = bgra_array[:, :, :3][:, :, ::-1]
 
@@ -64,14 +78,12 @@ class MPEGTSStreamEncoder:
         frame.pts = self.pts_counter
         self.pts_counter += 1
 
-        # Limpa o buffer de memória antes da nova codificação
-        self.output_buffer.seek(0)
-        self.output_buffer.truncate(0)
 
-        # 3. Codifica o frame com o FFmpeg
+        # 3. Codifica o frame com o FFmpeg e envia pra o container mpeg-ts 
         for packet in self.stream.encode(frame):
             self.container.mux(packet)
 
+     
         raw_ts_bytes = self.output_buffer.getvalue()
         if not raw_ts_bytes:
             return b""
@@ -88,6 +100,17 @@ class MPEGTSStreamEncoder:
                 ts_blocks.append(sph_header + ts_pkt_188)
 
         return b"".join(ts_blocks)
+    
+    def close(self):
+        """Fecha o container FFmpeg ao encerrar a execução."""
+        if hasattr(self, 'container') and self.container:
+            try:
+                # Efetua o flush dos pacotes pendentes
+                for packet in self.stream.encode():
+                    self.container.mux(packet)
+                self.container.close()
+            except Exception as e:
+                print(f"[!] Erro ao fechar o encoder PyAV: {e}")
 
 
 
@@ -106,10 +129,14 @@ class RGBCameraSensor(object):
     ───────────────────────────────────────────────────────────────────────────
     """
 
-    # Resolution of the camera (pixels).  Must match or be smaller than the
-    # pygame display so the PiP overlay fits on screen.
-    IMAGE_WIDTH = 470
-    IMAGE_HEIGHT = 200
+    # Resolução REAL da imagem (para o Streaming H.264/AVTP ter alta qualidade)
+    IMAGE_WIDTH = 960
+    IMAGE_HEIGHT = 400
+
+    # Resolução de EXIBIÇÃO no Pygame (pequena para não ocupar espaço na tela)
+    DISPLAY_WIDTH = 470
+    DISPLAY_HEIGHT = 200
+
 
     def __init__(self, parent_actor, gamma_correction=2.2, stream_id="0xAABBCCDDEEFF0001", interface="veth-s"):
         self.sensor = None
@@ -159,6 +186,8 @@ class RGBCameraSensor(object):
         bp.set_attribute('image_size_x', str(self.IMAGE_WIDTH))
         bp.set_attribute('image_size_y', str(self.IMAGE_HEIGHT))
         bp.set_attribute('fov', '90')
+        bp.set_attribute('sensor_tick', '0.033333')
+
         if bp.has_attribute('gamma'):
             bp.set_attribute('gamma', str(gamma_correction))
 
@@ -194,7 +223,11 @@ class RGBCameraSensor(object):
             finally:
                 self.sensor = None
 
-        # 2. Fechar o socket de rede RAW
+        # 2. Fechar o encoder MPEG-TS/PyAV
+        if hasattr(self, 'ts_encoder') and self.ts_encoder:
+            self.ts_encoder.close()
+
+        # 3. Fechar o socket de rede RAW
         if self.sock is not None:
             try:
                 self.sock.close()
@@ -203,7 +236,7 @@ class RGBCameraSensor(object):
             finally:
                 self.sock = None
 
-        # 3. Limpar ponteiros de memória do PyGame e numpy
+        # 4. Limpar ponteiros de memória do PyGame e numpy
         self.surface = None
         self.array = None
         print("[+] Câmera RGB desativada e socket AVTP fechado com sucesso.")
@@ -216,9 +249,15 @@ class RGBCameraSensor(object):
         
 
 
-    def render(self, display, pos=(0, 0)):
+    def render(self, display, pos=None):
         """Exibe a imagem na tela do Pygame."""
         if self.surface is not None:
+            if pos is None:
+                display_width = display.get_width()
+                display_height = display.get_height()
+
+                # Canto inferior direito
+                pos = (display_width - self.DISPLAY_WIDTH, display_height - self.DISPLAY_HEIGHT)
             display.blit(self.surface, pos)
 
 
@@ -242,8 +281,14 @@ class RGBCameraSensor(object):
             rgb_array = array[:, :, :3][:, :, ::-1]
             self.array = rgb_array
             try:
-                # Transpõe para o formato que a superfície do Pygame espera (Largura, Altura, 3)
-                self.surface = pygame.surfarray.make_surface(rgb_array.swapaxes(0, 1))
+                # 1. Cria a superfície no tamanho original (960x400)
+                full_surface = pygame.surfarray.make_surface(rgb_array.swapaxes(0, 1))
+                
+                # 2. Redimensiona apenas para a tela do Pygame (470x200)
+                self.surface = pygame.transform.scale(
+                    full_surface, 
+                    (self.DISPLAY_WIDTH, self.DISPLAY_HEIGHT)
+                )
             except Exception:
                 pass
 
@@ -277,17 +322,17 @@ class RGBCameraSensor(object):
             return
 
         # Envia os fragmentos
+
+        if not self.sock:
+            print("[!] Erro: Socket AF_PACKET não está aberto!")
+            return
+        
         sent_count = 0
         try:
-            if self.sock:
-                for pkt in packets:
-                    # Converte para bytes se for pacote Scapy, ou usa diretamente se já for bytes
-                    pkt_bytes = bytes(pkt) if not isinstance(pkt, bytes) else pkt
-                    self.sock.send(pkt_bytes)
-                    sent_count += 1
-            else:
-                sendp(packets, iface=self.interface, verbose=0)
-                sent_count = len(packets)
+            for pkt in packets:
+                pkt_bytes = bytes(pkt) if not isinstance(pkt, bytes) else pkt
+                self.sock.send(pkt_bytes)
+                sent_count += 1
         except Exception as err:
             print(f"[!] Erro no socket.send: {err}")
             return

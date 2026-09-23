@@ -115,10 +115,13 @@ def game_loop(args):
             world.render(display)
             can_display.render(display)
             # Render PiP last so it sits above all other overlays.
+            
             if world.rgb_camera_sensor is not None:
+
                 disp_w, disp_h = display.get_size()
-                pip_w = world.rgb_camera_sensor.IMAGE_WIDTH
-                pip_h = world.rgb_camera_sensor.IMAGE_HEIGHT
+              
+                pip_w = world.rgb_camera_sensor.DISPLAY_WIDTH
+                pip_h = world.rgb_camera_sensor.DISPLAY_HEIGHT
                 world.rgb_camera_sensor.render(
                     display, pos=(disp_w - pip_w - 10, disp_h - pip_h - 10)
                 )

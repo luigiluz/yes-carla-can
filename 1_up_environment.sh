@@ -5,11 +5,8 @@ CONDA_ENV_NAME="${CONDA_ENV_NAME:-n4s_env}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DBC_PATH="${DBC_PATH:-data/carla.dbc}"
 VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
-<<<<<<< HEAD
 MAP="${MAP:-}"
-=======
-AVTP_DIR="/home/ju/virtual-avtp-network"
->>>>>>> 76145e3 (avtp setup- avtp virtual network)
+AVTP_DIR="${SCRIPT_DIR}/avtp_network"
 
 usage() {
     cat <<EOF
@@ -55,7 +52,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-
+# Exporta o diretório do projeto para o PYTHONPATH (preservado pelo sudo -E)---- para evitar problemas com importaco de modulos
+export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH:-}"
 
 # Resolve Conda Python binary dynamically (no hardcoded user paths)
 if [[ -n "${CONDA_PREFIX}" && "${CONDA_DEFAULT_ENV}" == "${CONDA_ENV_NAME}" ]]; then
@@ -94,12 +92,13 @@ echo "Starting CARLA simulator..."
 ./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality-level=Low -nosound 2>/dev/null &
 
 echo "Setting up AVTP virtual network..."
-sudo bash -c "source ${AVTP_DIR}/.venv/bin/activate && bash ${AVTP_DIR}/setup.sh --capture"
+sudo bash "${AVTP_DIR}/setup.sh" --capture
 
-
-echo "Connecting AVTP veth-s to Host..."
-sudo ip netns exec sender ip link set veth-s netns 1 2>/dev/null || true
-sudo ip link set dev veth-s up
+# 3. Mover a ponta veth-s para o Host (permite ao CARLA rodar no Host com acesso ao AVTP L2)
+echo "Exposing AVTP sender interface to Host..."
+sudo ip netns exec sender ip link set veth-s netns 1
+sleep 1
+sudo ip link set dev veth-s up 
 
 
 
@@ -108,7 +107,7 @@ echo "Setting up virtual CAN bus..."
 sudo modprobe vcan
 sudo modprobe can-gw
 sudo ip link add dev "${VCAN_INTERFACE}" type vcan 2>/dev/null || true
-sudo ip link set up "${VCAN_INTERFACE}"
+sudo ip link set up "${VCAN_INTERFACE}" 2>/dev/null || true
 
 # Set up attacker CAN bus and bridge it to the main bus via can-gw.
 # Frames sent on vcan1 are forwarded to vcan0 and marked 'R' (received) by candump,
@@ -132,9 +131,26 @@ if [[ -n "${MAP}" ]]; then
     echo "Requesting CARLA map: ${MAP}"
     CLIENT_ARGS+=(--map "${MAP}")
 fi
-sudo "${PYTHON_EXEC}" "${SCRIPT_DIR}/CARLA_client_module.py" "${CLIENT_ARGS[@]}" &
+
+# Executar os módulos Python no Host com sudo -E (Acesso a vcan0 + veth-s Socket RAW + localhost)
+echo ""
+echo "======================================================================"
+echo " INFRAESTRUTURA DE REDE E CARLA PRONTOS!"
+echo " Agora, abra OUTRO terminal e inicie o RECEIVER:"
+echo ""
+echo "   xhost +local:sudo "
+echo ""
+echo ""
+echo "   sudo -E DISPLAY=\$DISPLAY PYTHONPATH=. ip netns exec receiver \"\$CONDA_PREFIX/bin/python\" avtp_network/receiver.py -i veth-r -o ."
+echo ""
+echo "======================================================================"
+read -p "Pressione [ENTER] AQUI após iniciar o receiver para subir os clientes do CARLA..."
+
+# Executar os módulos Python no Host
+echo "Starting CARLA client module..."
+sudo -E "${PYTHON_EXEC}" "${SCRIPT_DIR}/CARLA_client_module.py" "${CLIENT_ARGS[@]}" &
 
 echo "Starting vehicle controls module..."
 sudo "${PYTHON_EXEC}" "${SCRIPT_DIR}/vehicle_controls_module.py" --dbc "${DBC_PATH}" --vcan "${VCAN_INTERFACE}" &
 
-echo "Environment is up!"
+echo "Environment is completely up!"

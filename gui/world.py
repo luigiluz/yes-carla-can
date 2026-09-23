@@ -173,16 +173,35 @@ class World(object):
     def destroy(self):
         if self.radar_sensor is not None:
             self.toggle_radar()
+
+        # 1. Encerra limpadamente a câmera de streaming (fecha socket RAW + encoder + ator CARLA)
+        if self.rgb_camera_sensor is not None:
+            self.rgb_camera_sensor.destroy()
+            self.rgb_camera_sensor = None
+            self.camera_manager.index = None
+
+        # 2. Encerra o sensor da câmera principal
+        if self.camera_manager is not None and self.camera_manager.sensor is not None:
+            try:
+                self.camera_manager.sensor.destroy()
+            except Exception:
+                pass
+            self.camera_manager.sensor = None
+
         sensors = [
-            self.camera_manager.sensor,
-            self.rgb_camera_sensor.sensor if self.rgb_camera_sensor is not None else None,
             self.collision_sensor.sensor,
             self.lane_invasion_sensor.sensor,
             self.gnss_sensor.sensor,
             self.imu_sensor.sensor]
+        
         for sensor in sensors:
             if sensor is not None:
                 sensor.stop()
                 sensor.destroy()
+
         if self.player is not None:
             self.player.destroy()
+            self.player = None
+            
+        print("[WORLD] World.destroy() CONCLUÍDO COM SUCESSO!")
+        print("[WORLD] ----------------------------------------\n")

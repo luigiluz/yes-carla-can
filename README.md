@@ -209,8 +209,6 @@ You can bring the core simulation up with the following command:
 ./1_up_environment.sh
 ```
 
-change AVTP_DIR="/home/ju/virtual-avtp-network"
-
 
 You should see an output like the following, meaning that the environment was properly brought up:
 
@@ -321,7 +319,6 @@ When you are done, tear everything down cleanly:
 ```bash
 ./2_down_environment.sh
 ```
-change AVTP_DIR="/home/ju/virtual-avtp-network"
 
 The script stops the vehicle controls module, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, and finally removes `vcan0` and unloads the `vcan` kernel module.
 

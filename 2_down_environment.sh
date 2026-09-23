@@ -25,6 +25,8 @@ for arg in "$@"; do
     esac
 done
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AVTP_DIR="${SCRIPT_DIR}/avtp_network"
 VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
 
 # Stop vehicle controls module
@@ -60,6 +62,19 @@ else
     echo "CARLA_client_module process not found."
 fi
 
+
+# Stop AVTP Receiver (caso esteja a rodar em background ou num terminal)
+echo "Stopping AVTP receiver..."
+RECEIVER_PID=$(pgrep -d ' ' -f "receiver.py")
+if [ -n "$RECEIVER_PID" ]; then
+    kill $RECEIVER_PID 2>/dev/null || true
+    echo "AVTP receiver (PID $RECEIVER_PID) stopped."
+else
+    echo "AVTP receiver process not found."
+fi
+
+
+
 # Stop CARLA simulator only after the client has fully exited
 echo "Stopping CARLA simulator..."
 CARLA_PID=$(pgrep -d ' ' -f "CarlaUE4")
@@ -84,17 +99,13 @@ sudo modprobe -r vcan
 
 # Limpa a rede virtual AVTP e o namespace
 echo "Tearing down AVTP virtual network..."
-AVTP_DIR="/home/ju/virtual-avtp-network"
-
 if [ -f "${AVTP_DIR}/setup.sh" ]; then
-    sudo bash -c "source ${AVTP_DIR}/.venv/bin/activate 2>/dev/null || true; bash ${AVTP_DIR}/setup.sh --teardown" 2>/dev/null || true
+    sudo bash "${AVTP_DIR}/setup.sh" --teardown
+else
+    # Fallback caso o setup.sh não seja encontrado
+    sudo ip netns delete sender 2>/dev/null || true
+    sudo ip netns delete receiver 2>/dev/null || true
+    sudo ip netns delete switch 2>/dev/null || true
 fi
-
-
-# Garante que qualquer resquício de interface/namespace seja removido
-sudo ip link delete veth-s 2>/dev/null || true
-sudo ip netns delete sender 2>/dev/null || true
-sudo ip netns delete receiver 2>/dev/null || true
-sudo ip netns delete switch 2>/dev/null || true
 
 echo "Environment is down!"
