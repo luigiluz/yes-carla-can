@@ -5,10 +5,11 @@ CONDA_ENV_NAME="${CONDA_ENV_NAME:-n4s_env}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DBC_PATH="${DBC_PATH:-data/carla.dbc}"
 VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
+MAP="${MAP:-}"
 
 usage() {
     cat <<EOF
-Usage: $0 [-h|--help] [--dbc <path>]
+Usage: $0 [-h|--help] [--dbc <path>] [--vcan <name>] [--map <name>]
 
 Start the "Yes, CARLA CAN" simulation environment.
 
@@ -26,12 +27,15 @@ Options:
   --dbc <path>    Path to the DBC file defining the virtual CAN network schema
                   (default: data/carla.dbc)
   --vcan <name>   Name of the virtual CAN interface to create (default: vcan0)
+  --map <name>    CARLA map to load in the client (e.g. Town01, Town10HD).
+                  If omitted, the client uses the map currently loaded by CARLA.
 
 Environment variables:
   CARLA_FOLDER_NAME     Directory where CARLA is installed (default: carla-0-9-15)
   CONDA_ENV_NAME        Conda environment to use (default: n4s_env)
   DBC_PATH              DBC file path, overridden by --dbc if provided
   VCAN_INTERFACE        Virtual CAN interface name, overridden by --vcan if provided (default: vcan0)
+  MAP                   CARLA map name, overridden by --map if provided
   VK_ICD_FILENAMES      Force a specific Vulkan ICD file (skips auto-detection)
 EOF
 }
@@ -42,6 +46,7 @@ while [[ $# -gt 0 ]]; do
         -h|--help) usage; exit 0 ;;
         --dbc) DBC_PATH="$2"; shift 2 ;;
         --vcan) VCAN_INTERFACE="$2"; shift 2 ;;
+        --map) MAP="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; usage; exit 1 ;;
     esac
 done
@@ -87,7 +92,12 @@ sleep 5
 
 # Start CARLA client module in the background
 echo "Starting CARLA client module..."
-conda run -n "${CONDA_ENV_NAME}" python "${SCRIPT_DIR}/CARLA_client_module.py" --vcan "${VCAN_INTERFACE}" &
+CLIENT_ARGS=(--vcan "${VCAN_INTERFACE}")
+if [[ -n "${MAP}" ]]; then
+    echo "Requesting CARLA map: ${MAP}"
+    CLIENT_ARGS+=(--map "${MAP}")
+fi
+conda run -n "${CONDA_ENV_NAME}" python "${SCRIPT_DIR}/CARLA_client_module.py" "${CLIENT_ARGS[@]}" &
 
 # Start vehicle controls module in the background
 echo "Starting vehicle controls module..."

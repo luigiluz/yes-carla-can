@@ -57,8 +57,15 @@ def game_loop(args):
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
 
+        # Load the requested map (if any) before grabbing the world.
+        if args.map:
+            logging.info("Loading map %s ...", args.map)
+            sim_world = client.load_world(args.map)
+        else:
+            sim_world = client.get_world()
+            
         # Disable rendering and set fixed time step
-        sim_world = client.get_world()
+
         world_settings = sim_world.get_settings()
         world_settings.no_rendering_mode = True  # Disable rendering
         # fps = 30
@@ -200,6 +207,13 @@ def main():
         "--vcan",
         default=VCAN_CHANNEL,
         help=f"Virtual CAN interface name (default: {VCAN_CHANNEL})",
+    )
+    argparser.add_argument(
+        "--map",
+        metavar="NAME",
+        default=None,
+        help='CARLA map to load (e.g. "Town01", "Town10HD"). '
+             'If not set, the current world is used.',
     )
     args = argparser.parse_args()
 
