@@ -81,4 +81,20 @@ sudo ip link delete "${VCAN_INTERFACE}"
 sudo modprobe -r can-gw 2>/dev/null || true
 sudo modprobe -r vcan
 
+
+# Limpa a rede virtual AVTP e o namespace
+echo "Tearing down AVTP virtual network..."
+AVTP_DIR="/home/ju/virtual-avtp-network"
+
+if [ -f "${AVTP_DIR}/setup.sh" ]; then
+    sudo bash -c "source ${AVTP_DIR}/.venv/bin/activate 2>/dev/null || true; bash ${AVTP_DIR}/setup.sh --teardown" 2>/dev/null || true
+fi
+
+
+# Garante que qualquer resquício de interface/namespace seja removido
+sudo ip link delete veth-s 2>/dev/null || true
+sudo ip netns delete sender 2>/dev/null || true
+sudo ip netns delete receiver 2>/dev/null || true
+sudo ip netns delete switch 2>/dev/null || true
+
 echo "Environment is down!"

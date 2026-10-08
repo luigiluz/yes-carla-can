@@ -92,3 +92,12 @@ widgetsnbextension==4.0.13
 wrapt==1.17.0
 pytest
 zipp==3.20.2
+
+opencv-python
+setuptools
+scapy>=2.5.0
+
+torch>=2
+ultralytics
+
+av>=10.0.0

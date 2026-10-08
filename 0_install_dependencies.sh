@@ -104,17 +104,27 @@ echo "    conda activate ${CONDA_ENV_NAME}"
 # ------------------------------------------------------------------
 # 4. CARLA
 # ------------------------------------------------------------------
-mkdir -p ${CARLA_FOLDER_NAME}
-cd ${CARLA_FOLDER_NAME}
+# Verifica se a pasta do CARLA já existe antes de baixar
+if [ ! -d "${CARLA_FOLDER_NAME}" ]; then
+    echo "Baixando o CARLA..."
+    mkdir -p ${CARLA_FOLDER_NAME}
+    cd ${CARLA_FOLDER_NAME}
 
-echo "Downloading CARLA..."
-if [[ "${DOWNLOAD_FROM_CARLA_GITHUB,,}" == "true" ]]; then
-    wget https://tiny.carla.org/carla-0-9-15-linux
+    echo "Downloading CARLA..."
+    if [[ "${DOWNLOAD_FROM_CARLA_GITHUB,,}" == "true" ]]; then
+        wget https://tiny.carla.org/carla-0-9-15-linux
+    else
+        conda run --live-stream -n "${CONDA_ENV_NAME}" gdown "https://drive.google.com/uc?id=${CARLA_GDRIVE_FILE_ID}" -O carla-0-9-15-linux
+    fi
+
+    echo "Extracting CARLA..."
+    tar -xzvf carla-0-9-15-linux
+   
+    # Remove o arquivo compactado para economizar espaço em disco
+    rm carla-0-9-15-linux
+    
+    cd ..
+    echo "CARLA installed successfully!"
 else
-    conda run --live-stream -n "${CONDA_ENV_NAME}" gdown "https://drive.google.com/uc?id=${CARLA_GDRIVE_FILE_ID}" -O carla-0-9-15-linux
+    echo "CARLA already installed in folder '${CARLA_FOLDER_NAME}'. Skipping download."
 fi
-
-echo "Extracting CARLA..."
-tar -xzvf carla-0-9-15-linux
-
-echo "CARLA installed successfully!"

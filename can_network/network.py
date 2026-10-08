@@ -94,7 +94,9 @@ class CAN_Network(object):
         self.bus.send(self._build_msg("MANUAL_TRANSMISSION", int(controls.manual_gear_shift)))
 
     def send_gear_msg(self, controls):
-        self.bus.send(self._build_msg("GEAR", int(controls.gear)))
+        # Se o CARLA enviar -1 (Ré), convertemos para 0 (Neutro/Ré no DBC)
+        gear_val = max(0, int(controls.gear))
+        self.bus.send(self._build_msg("GEAR", gear_val))
 
     def send_autopilot_msg(self, controls):
         # controls.autopilot is not a standard VehicleControl field;
@@ -105,11 +107,19 @@ class CAN_Network(object):
     # Sensor senders
     # ------------------------------------------------------------------
 
-    def send_gnss_msg(self, lat, lon):
-        self.bus.send(self._build_sensor_msg("GNSS", {
-            "GNSS_LAT_signal": lat,
-            "GNSS_LON_signal": lon,
-        }))
+    def send_gnss_msg(self, lat=0.0, lon=0.0, alt=0.0):
+        # Trata se lat foi passado como uma tupla/vetor (lat, lon)
+        if isinstance(lat, (tuple, list)):
+            lat, lon = (lat[0], lat[1]) if len(lat) >= 2 else (0.0, 0.0)
+
+        try:
+            msg = self._build_sensor_msg("GNSS", {
+                "GNSS_LAT_signal": float(lat) if lat is not None else 0.0,
+                "GNSS_LON_signal": float(lon) if lon is not None else 0.0,
+            })
+            self.bus.send(msg)
+        except Exception:
+            pass
 
     def send_collision_msg(self, intensity):
         self.bus.send(self._build_sensor_msg("COLLISION", {
@@ -121,24 +131,47 @@ class CAN_Network(object):
             "LANE_INVASION_TYPE_signal": bitmask,
         }))
 
-    def send_imu_accel_msg(self, x, y, z):
-        self.bus.send(self._build_sensor_msg("IMU_ACCEL", {
-            "IMU_ACCEL_X_signal": x,
-            "IMU_ACCEL_Y_signal": y,
-            "IMU_ACCEL_Z_signal": z,
-        }))
+    def send_imu_accel_msg(self, x=0.0, y=0.0, z=0.0):
+        # Trata caso tenha recebido a tupla inteira no primeiro argumento (x)
+        if isinstance(x, (tuple, list)):
+            x, y, z = (x[0], x[1], x[2]) if len(x) >= 3 else (0.0, 0.0, 0.0)
 
-    def send_imu_gyro_msg(self, x, y, z):
-        self.bus.send(self._build_sensor_msg("IMU_GYRO", {
-            "IMU_GYRO_X_signal": x,
-            "IMU_GYRO_Y_signal": y,
-            "IMU_GYRO_Z_signal": z,
-        }))
+        try:
+            msg = self._build_sensor_msg("IMU_ACCEL", {
+                "IMU_ACCEL_X_signal": float(x) if x is not None else 0.0,
+                "IMU_ACCEL_Y_signal": float(y) if y is not None else 0.0,
+                "IMU_ACCEL_Z_signal": float(z) if z is not None else 0.0,
+            })
+            self.bus.send(msg)
+        except Exception:
+            pass
 
-    def send_imu_compass_msg(self, compass):
-        self.bus.send(self._build_sensor_msg("IMU_COMPASS", {
-            "IMU_COMPASS_signal": compass,
-        }))
+    def send_imu_gyro_msg(self, x=0.0, y=0.0, z=0.0):
+        if isinstance(x, (tuple, list)):
+            x, y, z = (x[0], x[1], x[2]) if len(x) >= 3 else (0.0, 0.0, 0.0)
+
+        try:
+            msg = self._build_sensor_msg("IMU_GYRO", {
+                "IMU_GYRO_X_signal": float(x) if x is not None else 0.0,
+                "IMU_GYRO_Y_signal": float(y) if y is not None else 0.0,
+                "IMU_GYRO_Z_signal": float(z) if z is not None else 0.0,
+            })
+            self.bus.send(msg)
+        except Exception:
+            pass
+
+    
+    def send_imu_compass_msg(self, compass=0.0):
+        if isinstance(compass, (tuple, list)):
+            compass = compass[0]
+
+        try:
+            msg = self._build_sensor_msg("IMU_COMPASS", {
+                "IMU_COMPASS_signal": float(compass) if compass is not None else 0.0
+            })
+            self.bus.send(msg)
+        except Exception:
+            pass
 
     def send_radar_target_msg(self, velocity, azimuth, altitude, depth):
         self.bus.send(self._build_sensor_msg("RADAR_TARGET", {
