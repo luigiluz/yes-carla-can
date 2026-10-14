@@ -40,9 +40,13 @@ yes-carla-can/
 ├── 1_up_environment.sh           # Starts CARLA, vcan0, and the core modules
 ├── 2_down_environment.sh         # Tears down the simulation environment cleanly
 │
+├── docker-compose.yml            # Runs the CARLA server and application client
+├── Dockerfile                    # Client image with all Python and SocketCAN tools
+├── docker-entrypoint.sh           # Sets up vCAN and supervises client processes
+│
 ├── CARLA_client_module.py        # Connects to CARLA, spawns the ego vehicle and sensors
 ├── vehicle_controls_module.py    # Translates keyboard input into CAN frames on vcan0
-├── cyberattacks_module.py        # CLI entry point for injecting attack traffic onto vcan0
+├── cyberattacks_module.py        # CLI entry point for injecting attack traffic via vcan1
 ├── intrusion_detection_module.py # CLI entry point for running IDS algorithms on vcan0
 │
 ├── requirements.txt              # Python package dependencies
@@ -96,6 +100,7 @@ yes-carla-can/
 
 This README is organized as follows:
 
+- [**Running with Docker**](#running-with-docker): one-command setup using Docker containers **(recommended)**.
 - [**Considered Badges**](#considered-badges): the evaluation badges being requested for this artifact submission.
 - [**Basic Information**](#basic-information): hardware and software environment used to develop and test the platform.
 - [**Dependencies**](#dependencies): software packages and tools required to run the platform.
@@ -105,6 +110,117 @@ This README is organized as follows:
 - [**Experiments**](#experiments): step-by-step reproduction of the paper's demonstrations.
 - [**Unit Tests**](#unit-tests): automated test suite for validating DBC and encoding logic.
 - [**LICENSE**](#license): the project's open-source license.
+
+---
+
+# Running with Docker
+
+The platform uses two containers: `server` runs CARLA, while `client` manages the virtual CAN network, graphical clients, vehicle controls, attacks, and intrusion detection tools.
+
+## Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| **Docker** | [Install Docker Engine](https://docs.docker.com/engine/install/) |
+| **Docker Compose** | Included with Docker Engine 20.10+; verify with `docker compose version` |
+| **Linux with X11** | Linux is required for SocketCAN; X11/XWayland is required for the Pygame windows |
+| **NVIDIA GPU and driver** | Required by the CARLA simulator server |
+| **NVIDIA Container Toolkit** | Required to expose the GPU to CARLA — [install guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) |
+
+> **Note:** The `client` container loads the host's `vcan` and `can-gw` modules and therefore runs in privileged mode. It owns the configured virtual interfaces while Compose is running and removes them during a normal shutdown. Do not configure names that belong to existing host interfaces.
+
+## Quick start
+
+Start Compose from a terminal in your graphical desktop session. The client uses
+the session's X11 authentication cookie, so preserve `DISPLAY` and `XAUTHORITY`:
+
+```bash
+export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
+test -r "$XAUTHORITY"
+```
+
+Then build the client image and start the platform:
+
+```bash
+docker compose up --build
+```
+
+This will:
+1. Create `vcan0` and attacker bus `vcan1` on the host kernel
+2. Bridge the two interfaces with `can-gw` for traffic direction labeling
+3. Launch the CARLA 0.9.15 simulator server with NVIDIA offscreen rendering
+4. Start the CARLA client and vehicle controls modules
+
+After a few seconds, the Pygame windows for the CARLA client and vehicle controls will appear.
+
+## Running experiments
+
+With the platform running, open a separate terminal and change to the repository
+directory before running experiments. Docker Compose looks for `docker-compose.yml`
+in the current directory.
+
+```bash
+cd /path/to/yes-carla-can
+```
+
+### Cyberattacks
+
+```bash
+# Hand brake spoofing attack
+docker compose exec client sh -lc 'python cyberattacks_module.py --feature hand_brake --period 0.001 --vcan "$VCAN_ATTACKER_INTERFACE"'
+
+# Fuzzy attack
+docker compose exec client sh -lc 'python cyberattacks_module.py --feature fuzzy --vcan "$VCAN_ATTACKER_INTERFACE"'
+
+# Denial-of-Service
+docker compose exec client sh -lc 'python cyberattacks_module.py --feature denial_of_service --period 0.001 --vcan "$VCAN_ATTACKER_INTERFACE"'
+```
+
+### Intrusion Detection System
+
+```bash
+docker compose exec client sh -lc 'python intrusion_detection_module.py --detector id_time --vcan "$VCAN_INTERFACE"'
+```
+
+### Monitoring CAN traffic
+
+```bash
+docker compose exec client sh -lc 'candump "$VCAN_INTERFACE"'
+```
+
+## Custom DBC file
+
+To use a custom DBC file, set the `DBC_PATH` environment variable:
+
+```bash
+DBC_PATH=data/my_custom.dbc docker compose up --build
+```
+
+The CAN interface names and CARLA RPC port can also be changed together:
+
+```bash
+VCAN_INTERFACE=vcan9 VCAN_ATTACKER_INTERFACE=vcan10 CARLA_PORT=2999 docker compose up --build
+```
+
+## Teardown
+
+Stop all containers and remove the CAN gateway routes and both virtual interfaces:
+
+```bash
+docker compose down
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DISPLAY` | Current desktop display | X11/XWayland display used by the graphical client |
+| `XAUTHORITY` | `$HOME/.Xauthority` | Host file containing the current X11 authentication cookie |
+| `DBC_PATH` | `data/carla.dbc` | Path to the DBC file (relative to the project root) |
+| `VCAN_INTERFACE` | `vcan0` | Name of the primary virtual CAN interface |
+| `VCAN_ATTACKER_INTERFACE` | `vcan1` | Name of the bridged attacker CAN interface |
+| `CARLA_HOST` | `127.0.0.1` | CARLA server hostname |
+| `CARLA_PORT` | `2000` | CARLA server TCP port |
 
 ---
 

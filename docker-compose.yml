@@ -1,0 +1,52 @@
+services:
+  server:
+    image: carlasim/carla:0.9.15
+    gpus: all
+    network_mode: host
+    privileged: true
+    environment:
+      CARLA_PORT: ${CARLA_PORT:-2000}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+    command:
+      - bash
+      - CarlaUE4.sh
+      - -RenderOffScreen
+      - -nosound
+      - -ResX=300
+      - -ResY=300
+      - -quality-level=Low
+      - -carla-rpc-port=${CARLA_PORT:-2000}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "bash -c 'exec 3<>/dev/tcp/127.0.0.1/$${CARLA_PORT}'"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  client:
+    image: yes-carla-can-client:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    privileged: true
+    environment:
+      DISPLAY: ${DISPLAY}
+      XAUTHORITY: /tmp/.docker.xauth
+      SDL_VIDEODRIVER: x11
+      DBC_PATH: ${DBC_PATH:-data/carla.dbc}
+      VCAN_INTERFACE: ${VCAN_INTERFACE:-vcan0}
+      VCAN_ATTACKER_INTERFACE: ${VCAN_ATTACKER_INTERFACE:-vcan1}
+      CARLA_HOST: ${CARLA_HOST:-127.0.0.1}
+      CARLA_PORT: ${CARLA_PORT:-2000}
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XAUTHORITY:-${HOME}/.Xauthority}:/tmp/.docker.xauth:ro
+    depends_on:
+      server:
+        condition: service_healthy
+    stop_grace_period: 15s

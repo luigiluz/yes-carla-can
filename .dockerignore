@@ -1,0 +1,26 @@
+# CARLA simulator installation (downloaded by 0_install_dependencies.sh)
+carla-0-9-15/
+carla-0-9-15.tar.gz
+
+# Git
+.git/
+.gitignore
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Documentation images (not needed at runtime)
+images/
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Docker files (avoid recursive context)
+docker-compose*.yml
+Dockerfile
+.dockerignore
