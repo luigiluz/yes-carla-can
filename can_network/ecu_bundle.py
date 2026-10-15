@@ -1,13 +1,17 @@
 import datetime
 import os
+from pathlib import Path
 
 from can_network.bus_config import CAN_INTERFACE
 from can_network.network import CAN_Network, SharedPhysicalBus
 
+DEFAULT_IDS_STATS_PATH = Path(__file__).parent.parent / "traffic_logs" / "logs_for_ml_ids_training_parsed_statistics.json"
+DEFAULT_IDS_MODEL_PATH = Path(__file__).parent.parent / "defense" / "ids_training" / "models" / "carla__baseline_parsed__isolation_forest.pkl"
+
 
 class ECUBundle:
     """The POWERTRAIN/COMFORT ECU pair for one script, plus their traffic displays and
-    phase-lock IDS panel if requested. Hides whether the two ECUs share one physical bus
+    IDS panel (time-based + Isolation Forest) if requested. Hides whether the two ECUs share one physical bus
     handle (neovi) or each opened their own (socketcan/vcan) — callers just use
     .powertrain/.comfort/.poll()/.shutdown() the same way either way.
     """
@@ -30,7 +34,8 @@ class ECUBundle:
 
 
 def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, with_displays=False,
-                     log_dir=None):
+                     log_dir=None, ids_stats_path=DEFAULT_IDS_STATS_PATH,
+                     ids_model_path=DEFAULT_IDS_MODEL_PATH):
     """Build the POWERTRAIN/COMFORT ECU pair for one script.
 
     On the neovi backend, a physical device can only be opened once per process, so both
@@ -75,7 +80,7 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
 
         if with_displays:
             from gui import IntrusionDetectionPanel
-            ids_panel = IntrusionDetectionPanel(dbc_path, powertrain_channel, comfort_channel, passive=True)
+            ids_panel = IntrusionDetectionPanel(ids_stats_path, ids_model_path, powertrain_channel, comfort_channel, passive=True)
             shared.add_consumer(shared.powertrain_netid, ids_panel.feed)
             shared.add_consumer(shared.comfort_netid, ids_panel.feed)
 
@@ -109,7 +114,7 @@ def open_ecu_bundle(dbc_path, powertrain_channel, comfort_channel, serial=None, 
 
     if with_displays:
         from gui import IntrusionDetectionPanel
-        ids_panel = IntrusionDetectionPanel(dbc_path, powertrain_channel, comfort_channel, serial=serial)
+        ids_panel = IntrusionDetectionPanel(ids_stats_path, ids_model_path, powertrain_channel, comfort_channel, serial=serial)
 
     def poll():
         powertrain.recv_msg()

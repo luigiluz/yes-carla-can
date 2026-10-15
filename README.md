@@ -516,6 +516,32 @@ You can also watch the IDS output during the fuzzy attack:
   </a>
 </p>
 
+The same time-based IDS also runs inside the CARLA client as a live panel. Press `I` to arm or disarm it. The panel loads its baseline from `traffic_logs/logs_for_ml_ids_training_parsed_statistics.json` by default, or from the file passed with `--ids-stats`. Any CAN ID missing from the baseline is reported as an intrusion. So whenever the DBC or the client's traffic changes, regenerate the baseline from a clean, attack-free capture:
+
+```bash
+# 1. With the CARLA client running and no attacks, capture clean traffic
+#    (written into traffic_logs/; on the neovi backend use the client's own --can-log-dir logs instead)
+python3 collect_traffic_logs.py --duration 300 --filename baseline.log
+# 2. Parse it to CSV (writes traffic_logs/baseline_parsed.csv)
+python3 data/candump_csv_parser.py --input traffic_logs/baseline.log
+# 3. Compute per-ID timing statistics (writes traffic_logs/baseline_parsed_statistics.json)
+python3 data/can_bus_data_analyzer.py --input traffic_logs/baseline_parsed.csv
+# 4. Use it
+python3 CARLA_client_module.py --ids-stats traffic_logs/baseline_parsed_statistics.json
+```
+
+The panel can also run an Isolation Forest IDS. Press `U` to switch between Time-Based and Isolation Forest. The Isolation Forest scores each frame's CAN ID and payload bytes, so it catches spoofed values, such as a hand brake set to `01` when it is always `00` in normal traffic. The time-based IDS can miss these when they are injected at a steady rate. It loads `defense/ids_training/models/carla__baseline_parsed__isolation_forest.pkl` by default, or the file passed with `--ids-model`. Train it from the same clean capture:
+
+```bash
+python3 defense/ids_training/train.py --csv traffic_logs/baseline_parsed.csv --dbc data/carla.dbc \
+    --ignore-label --exclude-ids 60E,60F,610,611,612,613,614
+```
+
+- `--ignore-label`: `candump_csv_parser.py` fills `label` from the candump T/R direction flag, not from attack ground truth.
+- `--exclude-ids`: leaves out the continuous sensor IDs (GNSS, collision, lane invasion, IMU, radar). Their raw payload bytes drift as the car drives, so they can't be modeled this way, and the detector passes them through unchecked.
+
+Each remaining ID gets its own score threshold: the lowest score any of its normal frames received. Any other CAN ID is flagged as an anomaly.
+
 ## Experiment #4 — Collecting network traffic
 
 Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Using the built-in `can-utils` tooling, this is as simple as:

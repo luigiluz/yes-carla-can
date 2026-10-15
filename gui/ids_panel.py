@@ -1,19 +1,30 @@
+import datetime
+import os
 import threading
+import time
 from collections import deque
 
 import can
 import pygame
 
 from can_network.bus_config import VCAN_CHANNEL, bus_kwargs
-from defense.phase_lock_intrusion_detection import PhaseLockIntrusionDetection
+from defense.id_time_intrusion_detection import IdTimeIntrusionDetection
+from defense.ids_training.ml_intrusion_detection import MlIntrusionDetection
 
 
 class IntrusionDetectionPanel:
-    """Renders the phase-lock IDS as a live, toggleable panel stacked alongside the
-    CAN traffic panels. Starts disabled - press the bound key (see
-    gui/keyboard_control.py) to arm it, so an attack can be demonstrated with and
-    without detection active. While disabled, frames are never passed to the
-    detector, so its internal timing state stays frozen rather than drifting stale.
+    """Renders the IDS as a live, toggleable panel stacked alongside the CAN traffic
+    panels. Hosts two detectors - the time-based IDS (ID + inter-arrival time) and the
+    Isolation Forest IDS (ID + payload) - and runs one at a time; the bound keys (see
+    gui/keyboard_control.py) arm/disarm it and cycle between them, so an attack can be
+    demonstrated with and without detection, and with each detector. Starts disabled.
+    While disabled, frames are never passed to the detector, so its internal timing
+    state stays frozen rather than drifting stale.
+
+    The Isolation Forest costs ~3.6 ms per single-frame predict() but ~5 ms for a batch
+    of 1000, so its frames are queued and scored in batches on a worker thread instead
+    of inline - inline scoring can't keep up with the bus and would stall the main loop
+    on the neovi backend, where feed() is called from it.
     """
 
     PANEL_WIDTH = 480
@@ -28,16 +39,27 @@ class IntrusionDetectionPanel:
     COLOR_ON = (41, 224, 138)
     COLOR_OFF = (120, 120, 120)
 
-    def __init__(self, dbc_path, powertrain_channel=VCAN_CHANNEL, comfort_channel=None,
+    ML_BATCH_INTERVAL = 0.05
+    ML_QUEUE_MAX = 20000
+
+    def __init__(self, stats_path, model_path=None, powertrain_channel=VCAN_CHANNEL, comfort_channel=None,
                  serial: str = None, passive: bool = False, max_alerts: int = 8):
         """passive=True: don't open any bus of our own - the caller feeds frames via
         feed(), e.g. a SharedPhysicalBus that already owns the one allowed handle to
         the physical device. passive=False (socketcan/vcan): open our own read-only
         bus(es), same reasoning as CANTrafficDisplay - the kernel allows multiple
         sockets per vcan interface, so no sharing is needed."""
-        self._dbc_path = dbc_path
-        self._detector = PhaseLockIntrusionDetection()
-        self._detector.load(dbc_path)
+        time_based = IdTimeIntrusionDetection()
+        time_based.load(stats_path)
+        self._detectors = [("Time-Based", time_based)]
+        if model_path and os.path.exists(model_path):
+            ml = MlIntrusionDetection()
+            ml.load(model_path)
+            self._detectors.append(("Isolation Forest", ml))
+        else:
+            print(f"[IntrusionDetectionPanel] No Isolation Forest model at {model_path} - only Time-Based IDS available")
+        self._index = 0
+        self._ml_queue = deque(maxlen=self.ML_QUEUE_MAX)
 
         self.enabled = False
         self._alerts = deque(maxlen=max_alerts)
@@ -47,6 +69,11 @@ class IntrusionDetectionPanel:
         self._active = True
         self._threads = []
         self._buses = []
+
+        if len(self._detectors) > 1:
+            thread = threading.Thread(target=self._ml_loop, daemon=True)
+            self._threads.append(thread)
+            thread.start()
 
         if passive:
             return
@@ -74,36 +101,70 @@ class IntrusionDetectionPanel:
             except Exception:
                 break
 
+    @property
+    def name(self):
+        return self._detectors[self._index][0]
+
+    @property
+    def _detector(self):
+        return self._detectors[self._index][1]
+
+    def _ml_loop(self):
+        while self._active:
+            time.sleep(self.ML_BATCH_INTERVAL)
+            msgs = []
+            while self._ml_queue:
+                msgs.append(self._ml_queue.popleft())
+            if not msgs:
+                continue
+            with self._lock:
+                if not self.enabled or not isinstance(self._detector, MlIntrusionDetection):
+                    continue
+                for msg in self._detector.run_batch(msgs):
+                    id_hex = format(msg.arbitration_id, 'X')
+                    self._alerts.append((msg.timestamp, self.COLOR_ALERT, f"[ALERT] anomaly on {id_hex}"))
+
     def feed(self, msg):
         """Passive mode: called by whoever owns the shared bus for each frame on our
         channel. Active mode: called from our own _recv_loop thread."""
         if not self.enabled:
             return
+        if isinstance(self._detector, MlIntrusionDetection):
+            self._ml_queue.append(msg)
+            return
 
         id_hex = format(msg.arbitration_id, 'X')
         with self._lock:
             before_intr = self._detector.intrusion_counter.get(id_hex, 0)
-            before_miss = self._detector.missed_counter.get(id_hex, 0)
 
             self._detector.run(msg)
 
             ts = msg.timestamp
             if self._detector.intrusion_counter.get(id_hex, 0) != before_intr:
-                self._alerts.append((ts, self.COLOR_ALERT, f"[ALERT] injected/early frame on {id_hex}"))
-            elif self._detector.missed_counter.get(id_hex, 0) != before_miss:
-                self._alerts.append((ts, self.COLOR_WARN, f"[WARN] missed cycle on {id_hex}"))
+                if id_hex in self._detector.known_ids:
+                    text = f"[ALERT] timing anomaly on {id_hex}"
+                else:
+                    text = f"[ALERT] unknown CAN ID {id_hex}"
+                self._alerts.append((ts, self.COLOR_ALERT, text))
 
     def toggle(self):
         with self._lock:
             self.enabled = not self.enabled
             if self.enabled:
-                # Clean slate for each arm-cycle, without re-parsing the DBC.
-                self._detector.tracking = {}
-                self._detector.intrusion_counter = {}
-                self._detector.missed_counter = {}
-                self._detector.regular_counter = 0
+                # Clean slate for each arm-cycle, without re-loading the baseline/model.
+                self._detector.reset()
                 self._alerts.clear()
+                self._ml_queue.clear()
             return self.enabled
+
+    def cycle(self):
+        """Switch to the next detector, starting it from a clean slate. Returns its name."""
+        with self._lock:
+            self._index = (self._index + 1) % len(self._detectors)
+            self._detector.reset()
+            self._alerts.clear()
+            self._ml_queue.clear()
+            return self.name
 
     def stop(self):
         self._active = False
@@ -143,7 +204,7 @@ class IntrusionDetectionPanel:
             display, self.COLOR_DIVIDER_ACCENT, (panel_x, panel_y, self.PANEL_WIDTH, panel_height), 1
         )
 
-        header_surf = self._font.render("Phase-Lock IDS", True, self.COLOR_DIVIDER_ACCENT)
+        header_surf = self._font.render(f"IDS: {self.name}", True, self.COLOR_DIVIDER_ACCENT)
         display.blit(header_surf, (panel_x + self.PADDING, panel_y + self.PADDING))
 
         pill_text = "ENABLED" if self.enabled else "DISABLED"
@@ -159,17 +220,16 @@ class IntrusionDetectionPanel:
         )
 
         y = divider_y + 4
-        panel_bottom = panel_y + panel_height
+        panel_bottom = panel_y + panel_height - self.LINE_HEIGHT
+
+        hint_surf = self._font.render("I arm/disarm   U switch IDS", True, self.COLOR_INFO)
+        display.blit(hint_surf, (panel_x + self.PADDING, panel_bottom))
 
         with self._lock:
             total_intrusions = sum(self._detector.intrusion_counter.values())
-            total_missed = sum(self._detector.missed_counter.values())
             regular_count = self._detector.regular_counter
             alerts_snapshot = list(self._alerts)
-        summary = (
-            f"Regular {regular_count}   "
-            f"Intrusions {total_intrusions}   Missed {total_missed}"
-        )
+        summary = f"Regular {regular_count}   Intrusions {total_intrusions}"
         summary_color = self.COLOR_ALERT if total_intrusions else self.COLOR_TEXT
         surf = self._font.render(summary, True, summary_color)
         display.blit(surf, (panel_x + self.PADDING, y))
@@ -182,9 +242,10 @@ class IntrusionDetectionPanel:
         y += 4
 
         visible_lines = max(0, (panel_bottom - y) // self.LINE_HEIGHT)
-        for _, color, text in reversed(alerts_snapshot[-visible_lines:]):
+        for ts, color, text in reversed(alerts_snapshot[-visible_lines:]):
             if y + self.LINE_HEIGHT > panel_bottom:
                 break
-            surf = self._font.render(text, True, color)
+            ts_text = datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S.%f")[:-3]
+            surf = self._font.render(f"{ts_text}  {text}", True, color)
             display.blit(surf, (panel_x + self.PADDING, y))
             y += self.LINE_HEIGHT

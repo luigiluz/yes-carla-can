@@ -35,6 +35,7 @@ try:
         K_r,
         K_s,
         K_t,
+        K_u,
         K_v,
         K_w,
     )
@@ -76,8 +77,10 @@ class KeyboardControl(object):
                 elif event.key == K_i and ids_panel is not None:
                     enabled = ids_panel.toggle()
                     world.hud.notification(
-                        f"Phase-Lock IDS {'Enabled' if enabled else 'Disabled'}"
+                        f"{ids_panel.name} IDS {'Enabled' if enabled else 'Disabled'}"
                     )
+                elif event.key == K_u and ids_panel is not None:
+                    world.hud.notification(f"IDS: {ids_panel.cycle()}")
                 elif event.key == K_BACKSPACE:
                     if self._autopilot_enabled:
                         world.player.set_autopilot(False)

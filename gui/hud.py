@@ -38,6 +38,9 @@ Use ARROWS or WASD keys for control.
     CTRL + +     : increments the start time of the replay by 1 second (+SHIFT = 10 seconds)
     CTRL + -     : decrements the start time of the replay by 1 second (+SHIFT = 10 seconds)
 
+    I            : arm/disarm IDS panel
+    U            : switch IDS (Time-Based / Isolation Forest)
+
     F1           : toggle HUD
     F11          : toggle fullscreen
     H/?          : toggle help

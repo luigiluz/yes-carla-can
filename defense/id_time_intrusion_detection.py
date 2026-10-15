@@ -60,6 +60,12 @@ class IdTimeIntrusionDetection():
         self.can_ids_statistics = can_ids_statistics
         self.running_statistics = {}
 
+    def reset(self):
+        """Clear counters and per-ID timing history, keeping the loaded baseline."""
+        self.intrusion_counter = {}
+        self.regular_counter = 0
+        self.running_statistics = {}
+
     def run(self, message):
         """Evaluate a single CAN message and update intrusion/regular counters."""
         id = format(message.arbitration_id, 'X')
@@ -74,18 +80,17 @@ class IdTimeIntrusionDetection():
             return
 
         if self.can_ids_statistics[id]['msg_type'] == "periodic":
+            # Track inter-arrival times (not raw timestamps) so they compare against std_timestamp_diff
             if id not in self.running_statistics:
-                self.running_statistics[id] = {'last_timestamps': QueueStats(maxlen=10)}
-                self.running_statistics[id]['last_timestamps'].add(timestamp)
+                self.running_statistics[id] = {'last_timestamp': timestamp, 'last_diffs': QueueStats(maxlen=10)}
             else:
-                self.running_statistics[id]['last_timestamps'].add(timestamp)
+                self.running_statistics[id]['last_diffs'].add(timestamp - self.running_statistics[id]['last_timestamp'])
+                self.running_statistics[id]['last_timestamp'] = timestamp
 
             # Check if queue is full
-            if len(self.running_statistics[id]['last_timestamps']) == self.running_statistics[id]['last_timestamps'].queue.maxlen:
+            if len(self.running_statistics[id]['last_diffs']) == self.running_statistics[id]['last_diffs'].queue.maxlen:
                 expected_std = 3*self.can_ids_statistics[id]["std_timestamp_diff"]
-                actual_std = self.running_statistics[id]['last_timestamps'].std()
-                # Take the mean value of the queue
-                #actual_diff = self.running_statistics[id]['last_timestamps'].mean() - self.can_ids_statistics[id]["mean_timestamp_diff"]
+                actual_std = self.running_statistics[id]['last_diffs'].std()
 
                 if actual_std > expected_std:
                     if id not in self.intrusion_counter:

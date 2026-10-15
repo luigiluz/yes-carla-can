@@ -50,6 +50,8 @@ def game_loop(args):
         "data/carla.dbc", args.powertrain_channel, args.comfort_channel,
         serial=args.can_serial, with_displays=True,
         log_dir=None if args.can_log_dir.lower() in ("", "none") else args.can_log_dir,
+        ids_stats_path=args.ids_stats,
+        ids_model_path=args.ids_model,
     )
     powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
     powertrain_display, comfort_display = bundle.powertrain_display, bundle.comfort_display
@@ -224,6 +226,18 @@ def main():
         help="Directory to write candump-format .log files of everything shown in the "
         "POWERTRAIN/COMFORT traffic panels (default: traffic_logs). Pass \"none\" to "
         "disable file logging.",
+    )
+    argparser.add_argument(
+        "--ids-stats",
+        default="traffic_logs/logs_for_ml_ids_training_parsed_statistics.json",
+        help="Baseline per-ID timing statistics JSON used by the time-based IDS panel "
+        "(default: traffic_logs/logs_for_ml_ids_training_parsed_statistics.json)",
+    )
+    argparser.add_argument(
+        "--ids-model",
+        default="defense/ids_training/models/carla__baseline_parsed__isolation_forest.pkl",
+        help="Trained Isolation Forest PKL used by the IDS panel (press U to switch to it) "
+        "(default: defense/ids_training/models/carla__baseline_parsed__isolation_forest.pkl)",
     )
     args = argparser.parse_args()
 
