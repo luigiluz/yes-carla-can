@@ -1,4 +1,7 @@
+import random
+
 import carla
+from agents.navigation.behavior_agent import BehaviorAgent
 
 from can_network.network import CAN_Network
 
@@ -51,12 +54,14 @@ class KeyboardControl(object):
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
+        self._agent = None
 
         if isinstance(world.player, carla.Vehicle):
             self._control = carla.VehicleControl()
             self._ackermann_control = carla.VehicleAckermannControl()
             self._lights = carla.VehicleLightState.NONE
-            world.player.set_autopilot(self._autopilot_enabled)
+            if self._autopilot_enabled:
+                self._start_autopilot(world)
             world.player.set_light_state(self._lights)
         elif isinstance(world.player, carla.Walker):
             self._control = carla.WalkerControl()
@@ -76,12 +81,10 @@ class KeyboardControl(object):
                 if self._is_quit_shortcut(event.key):
                     return True
                 elif event.key == K_BACKSPACE:
+                    world.restart()
                     if self._autopilot_enabled:
-                        world.player.set_autopilot(False)
-                        world.restart()
-                        world.player.set_autopilot(True)
-                    else:
-                        world.restart()
+                        # world.player is a new actor after restart; rebuild the agent for it.
+                        self._start_autopilot(world)
                 elif event.key == K_F1:
                     world.hud.toggle_info()
                 elif event.key == K_v and pygame.key.get_mods() & KMOD_SHIFT:
@@ -164,7 +167,7 @@ class KeyboardControl(object):
                     world.destroy_sensors()
                     # disable autopilot
                     self._autopilot_enabled = False
-                    world.player.set_autopilot(self._autopilot_enabled)
+                    self._agent = None
                     world.hud.notification("Replaying file 'manual_recording.rec'")
                     # replayer
                     client.replay_file(
@@ -203,65 +206,80 @@ class KeyboardControl(object):
                                 "experience some issues with the traffic simulation"
                             )
                         self._autopilot_enabled = not self._autopilot_enabled
-                        world.player.set_autopilot(self._autopilot_enabled)
+                        if self._autopilot_enabled:
+                            self._start_autopilot(world)
+                        else:
+                            self._agent = None
                         world.hud.notification(
                             "Autopilot %s"
                             % ("On" if self._autopilot_enabled else "Off")
                         )
 
-        if not self._autopilot_enabled:
-            if isinstance(self._control, carla.VehicleControl):
-                if can_network.door_change_state:
-                    can_network.door_change_state = False
-                    try:
-                        if world.doors_are_open:
-                            world.hud.notification("Closing Doors")
-                            world.doors_are_open = False
-                            world.player.close_door(carla.VehicleDoor.All)
-                        else:
-                            world.hud.notification("Opening doors")
-                            world.doors_are_open = True
-                            world.player.open_door(carla.VehicleDoor.All)
-                    except Exception:
-                        pass
+        if self._agent is not None:
+            # Autopilot output goes onto the CAN bus; it reaches the vehicle only through recv_msg() below.
+            if self._agent.done():
+                self._set_random_destination(world)
+            can_network.send_periodic_controls(self._agent.run_step())
 
-                world.hud.notification(
-                    "%s Transmission"
-                    % ("Manual" if self._control.manual_gear_shift else "Automatic")
-                )
+        if isinstance(self._control, carla.VehicleControl):
+            if can_network.door_change_state:
+                can_network.door_change_state = False
+                try:
+                    if world.doors_are_open:
+                        world.hud.notification("Closing Doors")
+                        world.doors_are_open = False
+                        world.player.close_door(carla.VehicleDoor.All)
+                    else:
+                        world.hud.notification("Opening doors")
+                        world.doors_are_open = True
+                        world.player.open_door(carla.VehicleDoor.All)
+                except Exception:
+                    pass
 
-                if not self._lights & carla.VehicleLightState.Position:
-                    world.hud.notification("Position lights")
-                else:
-                    world.hud.notification("Low beam lights")
-                if self._lights & carla.VehicleLightState.LowBeam:
-                    world.hud.notification("Fog lights")
-                if self._lights & carla.VehicleLightState.Fog:
-                    world.hud.notification("Lights off")
+            world.hud.notification(
+                "%s Transmission"
+                % ("Manual" if self._control.manual_gear_shift else "Automatic")
+            )
 
-                current_lights = can_network.current_lights
+            if not self._lights & carla.VehicleLightState.Position:
+                world.hud.notification("Position lights")
+            else:
+                world.hud.notification("Low beam lights")
+            if self._lights & carla.VehicleLightState.LowBeam:
+                world.hud.notification("Fog lights")
+            if self._lights & carla.VehicleLightState.Fog:
+                world.hud.notification("Lights off")
 
-                if (
-                    current_lights != self._lights
-                ):  # Change the light state only if necessary
-                    self._lights = current_lights
-                    world.player.set_light_state(carla.VehicleLightState(self._lights))
-                ## Apply control
-                if not self._ackermann_enabled:
-                    received_controls = can_network.recv_msg()
-                    world.player.apply_control(received_controls)
-                else:
-                    world.player.apply_ackermann_control(self._ackermann_control)
-                    # Update control to the last one applied by the ackermann controller.
-                    self._control = world.player.get_control()
-                    # Update hud with the newest ackermann control
-                    world.hud.update_ackermann_control(self._ackermann_control)
+            current_lights = can_network.current_lights
 
-            elif isinstance(self._control, carla.WalkerControl):
-                self._parse_walker_keys(
-                    pygame.key.get_pressed(), clock.get_time(), world
-                )
-                world.player.apply_control(self._control)
+            if (
+                current_lights != self._lights
+            ):  # Change the light state only if necessary
+                self._lights = current_lights
+                world.player.set_light_state(carla.VehicleLightState(self._lights))
+            ## Apply control
+            if not self._ackermann_enabled:
+                received_controls = can_network.recv_msg()
+                world.player.apply_control(received_controls)
+            else:
+                world.player.apply_ackermann_control(self._ackermann_control)
+                # Update control to the last one applied by the ackermann controller.
+                self._control = world.player.get_control()
+                # Update hud with the newest ackermann control
+                world.hud.update_ackermann_control(self._ackermann_control)
+
+        elif isinstance(self._control, carla.WalkerControl):
+            self._parse_walker_keys(
+                pygame.key.get_pressed(), clock.get_time(), world
+            )
+            world.player.apply_control(self._control)
+
+    def _start_autopilot(self, world):
+        self._agent = BehaviorAgent(world.player, behavior="normal")
+        self._set_random_destination(world)
+
+    def _set_random_destination(self, world):
+        self._agent.set_destination(random.choice(world.map.get_spawn_points()).location)
 
     def _parse_vehicle_keys(self, keys, milliseconds):
         if keys[K_UP] or keys[K_w]:

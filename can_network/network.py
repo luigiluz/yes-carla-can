@@ -1,7 +1,11 @@
+import time
+
 import can
 import carla
 
-from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
+from can_network.dbc import (
+    load_and_validate, MESSAGE_SENDERS, REQUIRED_MESSAGES, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES,
+)
 
 VCAN_CHANNEL = "vcan0"
 VCAN_ATTACKER_CHANNEL = "vcan1"
@@ -20,6 +24,7 @@ class CAN_Network(object):
         )
         self.recvd_controls = carla.VehicleControl()
         self.db, self.cycle_times = load_and_validate(dbc_path)
+        self._control_last_sent = {}
 
     # ------------------------------------------------------------------
     # Internal helper
@@ -190,6 +195,16 @@ class CAN_Network(object):
         self.send_reverse_msg(controls)
         self.send_manual_transmission_msg(controls)
         self.send_gear_msg(controls)
+
+    def send_periodic_controls(self, controls):
+        """Send each control message whose DBC cycle time has elapsed since it was last sent."""
+        now = time.time()
+        for name in REQUIRED_MESSAGES:
+            interval = self.cycle_times.get(name)
+            if interval is None or now - self._control_last_sent.get(name, 0.0) < interval:
+                continue
+            getattr(self, MESSAGE_SENDERS[name])(controls)
+            self._control_last_sent[name] = now
 
     # ------------------------------------------------------------------
     # Receivers

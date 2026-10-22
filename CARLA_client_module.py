@@ -29,6 +29,11 @@ try:
 except IndexError:
     pass
 
+# CARLA's client-side navigation agents (BehaviorAgent) used by the CAN-routed autopilot.
+sys.path.append(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "carla-0-9-15", "PythonAPI", "carla")
+)
+
 import tkinter as tk
 
 import carla

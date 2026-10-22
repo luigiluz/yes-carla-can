@@ -363,3 +363,37 @@ def test_radar_target_encoding_round_trip(sensor_net_and_bus, velocity, azimuth,
     assert decoded["RADAR_AZI_signal"]   == pytest.approx(azimuth,   abs=0.01)
     assert decoded["RADAR_ALT_signal"]   == pytest.approx(altitude,  abs=0.01)
     assert decoded["RADAR_DEPTH_signal"] == pytest.approx(depth,     abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Periodic control sending (used by the CAN-routed autopilot)
+# ---------------------------------------------------------------------------
+
+
+def _control_values():
+    controls = MagicMock()
+    controls.throttle, controls.steer, controls.brake = 0.5, 0.0, 0.0
+    controls.hand_brake, controls.reverse, controls.manual_gear_shift = False, False, False
+    controls.gear = 1
+    return controls
+
+
+def test_periodic_controls_first_call_sends_all_control_messages(net_and_bus):
+    """The first call sends every control message exactly once, and nothing else."""
+    net, mock_bus = net_and_bus
+    with patch("can_network.network.time.time", return_value=1000.0):
+        net.send_periodic_controls(_control_values())
+    sent_ids = sorted(c[0][0].arbitration_id for c in mock_bus.send.call_args_list)
+    assert sent_ids == [1536, 1537, 1538, 1539, 1540, 1542, 1543]
+
+
+def test_periodic_controls_respects_cycle_times(net_and_bus):
+    """After 150 ms only the 100 ms messages (THROTTLE, BRAKE, STEER) are due again."""
+    net, mock_bus = net_and_bus
+    with patch("can_network.network.time.time", return_value=1000.0):
+        net.send_periodic_controls(_control_values())
+    mock_bus.send.reset_mock()
+    with patch("can_network.network.time.time", return_value=1000.15):
+        net.send_periodic_controls(_control_values())
+    sent_ids = sorted(c[0][0].arbitration_id for c in mock_bus.send.call_args_list)
+    assert sent_ids == [1536, 1537, 1538]

@@ -316,6 +316,10 @@ You can watch the same demonstration in the following video:
   </a>
 </p>
 
+### Autopilot over CAN
+
+Press `P` in the CARLA client window (or start the client with `-a`) to turn the autopilot on. Instead of handing the vehicle to CARLA's Traffic Manager, the client runs CARLA's `BehaviorAgent`, and its throttle, brake, steer, gear, etc. are published on `vcan0` at the DBC cycle times. The vehicle is then actuated only by the frames it reads back from the bus, so autopilot driving is visible to `candump`, to the IDS and to the attacks. The vehicle controls module sends the same CAN IDs continuously (even with no key pressed), so stop it before engaging the autopilot (`pkill -f vehicle_controls_module.py`), unless two ECUs fighting over the bus is what you want to study.
+
 When you are done, tear everything down cleanly:
 
 ```bash
