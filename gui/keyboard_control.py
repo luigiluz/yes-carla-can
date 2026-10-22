@@ -1,4 +1,5 @@
 import random
+import time
 
 import carla
 from agents.navigation.behavior_agent import BehaviorAgent
@@ -49,9 +50,11 @@ except ImportError:
 class KeyboardControl(object):
     """Class that handles keyboard input."""
 
-    def __init__(self, world, start_in_autopilot):
+    # Disengage if AUTOPILOT frames stop arriving (3x its 500 ms DBC cycle), e.g. the controls module died.
+    AUTOPILOT_TIMEOUT = 1.5
+
+    def __init__(self, world):
         self._can = CAN_Network()
-        self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
         self._agent = None
@@ -60,12 +63,9 @@ class KeyboardControl(object):
             self._control = carla.VehicleControl()
             self._ackermann_control = carla.VehicleAckermannControl()
             self._lights = carla.VehicleLightState.NONE
-            if self._autopilot_enabled:
-                self._start_autopilot(world)
             world.player.set_light_state(self._lights)
         elif isinstance(world.player, carla.Walker):
             self._control = carla.WalkerControl()
-            self._autopilot_enabled = False
             self._rotation = world.player.get_transform().rotation
         else:
             raise NotImplementedError("Actor type not supported")
@@ -82,7 +82,7 @@ class KeyboardControl(object):
                     return True
                 elif event.key == K_BACKSPACE:
                     world.restart()
-                    if self._autopilot_enabled:
+                    if self._agent is not None:
                         # world.player is a new actor after restart; rebuild the agent for it.
                         self._start_autopilot(world)
                 elif event.key == K_F1:
@@ -166,7 +166,6 @@ class KeyboardControl(object):
                     current_index = world.camera_manager.index
                     world.destroy_sensors()
                     # disable autopilot
-                    self._autopilot_enabled = False
                     self._agent = None
                     world.hud.notification("Replaying file 'manual_recording.rec'")
                     # replayer
@@ -199,21 +198,18 @@ class KeyboardControl(object):
                             "Ackermann Controller %s"
                             % ("Enabled" if self._ackermann_enabled else "Disabled")
                         )
-                    elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
-                        if not self._autopilot_enabled and not sync_mode:
-                            print(
-                                "WARNING: You are currently in asynchronous mode and could "
-                                "experience some issues with the traffic simulation"
-                            )
-                        self._autopilot_enabled = not self._autopilot_enabled
-                        if self._autopilot_enabled:
-                            self._start_autopilot(world)
-                        else:
-                            self._agent = None
-                        world.hud.notification(
-                            "Autopilot %s"
-                            % ("On" if self._autopilot_enabled else "Off")
-                        )
+
+        # The vehicle controls module engages the autopilot by announcing AUTOPILOT=1 on the bus.
+        engaged = (
+            can_network.autopilot_engaged
+            and time.time() - can_network.autopilot_last_seen < self.AUTOPILOT_TIMEOUT
+        )
+        if isinstance(self._control, carla.VehicleControl) and engaged != (self._agent is not None):
+            if engaged:
+                self._start_autopilot(world)
+            else:
+                self._agent = None
+            world.hud.notification("Autopilot %s" % ("On" if engaged else "Off"))
 
         if self._agent is not None:
             # Autopilot output goes onto the CAN bus; it reaches the vehicle only through recv_msg() below.

@@ -1,7 +1,7 @@
 """Unit tests for can_network/dbc.py — DBC loading and validation rules."""
 import pytest
 from can_network.dbc import load_and_validate, REQUIRED_MESSAGES, SUPPORTED_MESSAGES, SENSOR_MESSAGES
-from constants import MINIMAL_DBC, SENSOR_DBC
+from constants import AUTOPILOT_DBC, MINIMAL_DBC, SENSOR_DBC
 
 
 @pytest.fixture
@@ -163,3 +163,18 @@ def test_sensor_message_with_missing_signal_raises_value_error(tmp_path):
     p.write_text(broken)
     with pytest.raises(ValueError, match="GNSS"):
         load_and_validate(p)
+
+
+def test_autopilot_message_validates_and_has_cycle_time(tmp_path):
+    """The optional AUTOPILOT message is accepted with AUTOPILOT_signal and scheduled at 500 ms."""
+    p = tmp_path / "autopilot.dbc"
+    p.write_text(AUTOPILOT_DBC)
+    _, cycle_times = load_and_validate(str(p))
+    assert cycle_times["AUTOPILOT"] == pytest.approx(0.5)
+
+
+def test_autopilot_wrong_signal_name_raises_value_error(tmp_path):
+    p = tmp_path / "autopilot_bad.dbc"
+    p.write_text(AUTOPILOT_DBC.replace("AUTOPILOT_signal", "AP_signal"))
+    with pytest.raises(ValueError, match="AUTOPILOT"):
+        load_and_validate(str(p))

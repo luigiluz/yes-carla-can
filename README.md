@@ -318,7 +318,7 @@ You can watch the same demonstration in the following video:
 
 ### Autopilot over CAN
 
-Press `P` in the CARLA client window (or start the client with `-a`) to turn the autopilot on. Instead of handing the vehicle to CARLA's Traffic Manager, the client runs CARLA's `BehaviorAgent`, and its throttle, brake, steer, gear, etc. are published on `vcan0` at the DBC cycle times. The vehicle is then actuated only by the frames it reads back from the bus, so autopilot driving is visible to `candump`, to the IDS and to the attacks. The vehicle controls module sends the same CAN IDs continuously (even with no key pressed), so stop it before engaging the autopilot (`pkill -f vehicle_controls_module.py`), unless two ECUs fighting over the bus is what you want to study.
+Press `P` in the **vehicle controls** window (or start `vehicle_controls_module.py` with `-a`) to engage the autopilot, and press it again to take back control. The vehicle controls module then stops sending its own throttle, brake, steer, gear, etc. and announces `AUTOPILOT=1` on `vcan0` (ID 1541, every 500 ms). When the CARLA client sees that message, it runs CARLA's `BehaviorAgent` and publishes the agent's controls on `vcan0` at the DBC cycle times, instead of handing the vehicle to CARLA's Traffic Manager. The vehicle is actuated only by the frames it reads back from the bus, so autopilot driving is visible to `candump`, to the IDS and to the attacks. If `AUTOPILOT=1` stops arriving for 1.5 s, the client disengages. The engage request is itself a CAN frame, so it can be spoofed too: `cansend vcan0 605#01` engages the autopilot while the driver's controls are still being sent.
 
 When you are done, tear everything down cleanly:
 
