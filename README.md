@@ -209,6 +209,8 @@ You can bring the core simulation up with the following command:
 ./1_up_environment.sh
 ```
 
+> **Optional: AVTP camera streaming.** By default the front RGB camera is only shown in the GUI. To also stream it over AVTP (IEEE 1722) on a virtual Layer-2 network, run `./1_up_environment.sh --avtp`. This builds the AVTP namespaces, records the frames to an `avtp_capture_<timestamp>.pcap` file, and pauses until you start the receiver in another terminal (the script prints the exact command). See [avtp_network/README.md](avtp_network/README.md) for details.
+
 
 You should see an output like the following, meaning that the environment was properly brought up:
 

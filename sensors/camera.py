@@ -138,40 +138,43 @@ class RGBCameraSensor(object):
     DISPLAY_HEIGHT = 200
 
 
-    def __init__(self, parent_actor, gamma_correction=2.2, stream_id="0xAABBCCDDEEFF0001", interface="veth-s"):
+    def __init__(self, parent_actor, gamma_correction=2.2, stream_id="0xAABBCCDDEEFF0001", interface="veth-s", avtp=False):
         self.sensor = None
         self.surface = None          # pygame.Surface, updated each frame
         self.array = None            # numpy (H, W, 3) uint8 RGB, updated each frame
         self.recording = False       # set True to auto-save every frame to disk
 
         self.enabled = True  # Flag de controle
+        self.avtp = avtp     # set True to stream frames over AVTP (requires veth-s)
+        self.ts_encoder = None
+        self.sock = None
 
 
         # ── Configurações de Rede AVTP ───────────────────────────────────────
-        self.interface = interface
-        self.stream_id = int(stream_id, 16)
-        self.ts_encoder = MPEGTSStreamEncoder(width=self.IMAGE_WIDTH,height=self.IMAGE_HEIGHT,fps=30,pid=0x18) # 24 muah
+        if self.avtp:
+            self.interface = interface
+            self.stream_id = int(stream_id, 16)
+            self.ts_encoder = MPEGTSStreamEncoder(width=self.IMAGE_WIDTH,height=self.IMAGE_HEIGHT,fps=30,pid=0x18) # 24 muah
 
-        try:
-            self.src_mac = get_if_hwaddr(self.interface)
-        except Exception as exc:
-            print(f"[!] Erro ao ler MAC da interface '{self.interface}': {exc}")
-            sys.exit(1)
+            try:
+                self.src_mac = get_if_hwaddr(self.interface)
+            except Exception as exc:
+                print(f"[!] Erro ao ler MAC da interface '{self.interface}': {exc}")
+                sys.exit(1)
 
-        try:
-            self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
-            self.sock.bind((self.interface, 0))
-        except Exception as e:
-            print(f"[!] Erro ao abrir RAW Socket na interface '{self.interface}': {e}")
-            self.sock = None
+            try:
+                self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+                self.sock.bind((self.interface, 0))
+            except Exception as e:
+                print(f"[!] Erro ao abrir RAW Socket na interface '{self.interface}': {e}")
+                self.sock = None
 
-        
-        # Contadores do AVTP
-        self.seq_counter = 0     # AVTP sequence_num (wraps at 255)
-        self.frames_sent = 0
-        self.pkts_sent = 0
-        self.bytes_sent = 0
-        self.start_time = time.time()
+            # Contadores do AVTP
+            self.seq_counter = 0     # AVTP sequence_num (wraps at 255)
+            self.frames_sent = 0
+            self.pkts_sent = 0
+            self.bytes_sent = 0
+            self.start_time = time.time()
         # ─────────────────────────────────────────────────────────────────────
 
 
@@ -244,7 +247,10 @@ class RGBCameraSensor(object):
     def toggle_camera(self):
         """Alterna o envio de imagens via AVTP e o processamento entre ligado/desligado."""
         self.enabled = not self.enabled
-        status = "LIGADA (Transmitindo AVTP)" if self.enabled else "DESLIGADA (Pausada)"
+        if not self.enabled:
+            status = "DESLIGADA (Pausada)"
+        else:
+            status = "LIGADA (Transmitindo AVTP)" if self.avtp else "LIGADA"
         print(f"[*] Câmera RGB: {status}")
         
 
@@ -292,6 +298,8 @@ class RGBCameraSensor(object):
             except Exception:
                 pass
 
+        if not self.avtp:
+            return
 
         # Codifica para o Padrão MPEG-TS ISO/IEC 13818-1 (Blocos de 192 Bytes)
         ts_stream_bytes = self.ts_encoder.encode_frame_to_ts_blocks(bgra_array)
