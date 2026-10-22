@@ -216,6 +216,7 @@ class KeyboardControl(object):
             if self._agent.done():
                 self._set_random_destination(world)
             can_network.send_periodic_controls(self._agent.run_step())
+        world.hud.autopilot = self._agent is not None
 
         if isinstance(self._control, carla.VehicleControl):
             if can_network.door_change_state:
