@@ -185,3 +185,6 @@ candump*
 *.pcap
 
 output_stream*
+
+**/maps/**
+**/traffic_logs/**
