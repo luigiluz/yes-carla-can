@@ -97,7 +97,6 @@ opencv-python
 setuptools
 scapy>=2.5.0
 
-torch>=2
 ultralytics
 
 av>=10.0.0

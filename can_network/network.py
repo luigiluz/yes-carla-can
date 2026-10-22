@@ -1,7 +1,11 @@
+import time
+
 import can
 import carla
 
-from can_network.dbc import load_and_validate, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES
+from can_network.dbc import (
+    load_and_validate, MESSAGE_SENDERS, REQUIRED_MESSAGES, REQUIRED_SIGNALS, LIGHT_SIGNALS, SENSOR_MESSAGES,
+)
 
 VCAN_CHANNEL = "vcan0"
 VCAN_ATTACKER_CHANNEL = "vcan1"
@@ -20,6 +24,10 @@ class CAN_Network(object):
         )
         self.recvd_controls = carla.VehicleControl()
         self.db, self.cycle_times = load_and_validate(dbc_path)
+        self._control_last_sent = {}
+        # Autopilot engage state, as last announced on the bus by the vehicle controls module.
+        self.autopilot_engaged = False
+        self.autopilot_last_seen = 0.0
 
     # ------------------------------------------------------------------
     # Internal helper
@@ -98,10 +106,8 @@ class CAN_Network(object):
         gear_val = max(0, int(controls.gear))
         self.bus.send(self._build_msg("GEAR", gear_val))
 
-    def send_autopilot_msg(self, controls):
-        # controls.autopilot is not a standard VehicleControl field;
-        # adapt the value source here if you have an autopilot state elsewhere.
-        pass
+    def send_autopilot_msg(self, engaged):
+        self.bus.send(self._build_msg("AUTOPILOT", int(engaged)))
 
     # ------------------------------------------------------------------
     # Sensor senders
@@ -191,6 +197,16 @@ class CAN_Network(object):
         self.send_manual_transmission_msg(controls)
         self.send_gear_msg(controls)
 
+    def send_periodic_controls(self, controls):
+        """Send each control message whose DBC cycle time has elapsed since it was last sent."""
+        now = time.time()
+        for name in REQUIRED_MESSAGES:
+            interval = self.cycle_times.get(name)
+            if interval is None or now - self._control_last_sent.get(name, 0.0) < interval:
+                continue
+            getattr(self, MESSAGE_SENDERS[name])(controls)
+            self._control_last_sent[name] = now
+
     # ------------------------------------------------------------------
     # Receivers
     # ------------------------------------------------------------------
@@ -237,6 +253,10 @@ class CAN_Network(object):
 
             elif name == "GEAR":
                 self.recvd_controls.gear = int(data[REQUIRED_SIGNALS["GEAR"]])
+
+            elif name == "AUTOPILOT":
+                self.autopilot_engaged = bool(data[REQUIRED_SIGNALS["AUTOPILOT"]])
+                self.autopilot_last_seen = time.time()
 
             elif name == "DOORS":
                 if data[REQUIRED_SIGNALS["DOORS"]]:

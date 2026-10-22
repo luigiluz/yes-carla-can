@@ -100,3 +100,12 @@ SENSOR_DBC = FULL_DBC.replace(
     ' SG_ RADAR_DEPTH_signal : 48|16@1+ (0.01,0) [0|655.35] "m" ECU\n'
     '\nBA_ "GenMsgCycleTime" BO_ 1556 0;\n',
 )
+
+# FULL_DBC extended with the optional AUTOPILOT message. Used in autopilot engage tests.
+AUTOPILOT_DBC = FULL_DBC.replace(
+    'BA_ "GenMsgCycleTime" BO_ 1549 0;\n',
+    'BA_ "GenMsgCycleTime" BO_ 1549 0;\n'
+    '\nBO_ 1541 AUTOPILOT: 4 ECU\n'
+    ' SG_ AUTOPILOT_signal : 0|8@1+ (1,0) [0|255] "" ECU\n'
+    '\nBA_ "GenMsgCycleTime" BO_ 1541 500;\n',
+)

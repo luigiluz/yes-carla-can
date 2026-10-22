@@ -7,7 +7,7 @@ import carla
 
 import can_network
 from can_network import VCAN_CHANNEL
-from can_network.dbc import MESSAGE_SENDERS
+from can_network.dbc import MESSAGE_SENDERS, REQUIRED_MESSAGES
 
 try:
     import pygame
@@ -28,6 +28,7 @@ try:
         K_l,
         K_m,
         K_o,
+        K_p,
         K_q,
         K_s,
         K_w,
@@ -71,11 +72,17 @@ class KeyboardSenderControl(object):
         """Fire each message independently according to its DBC cycle time."""
         now = time.time()
         for msg_name, (interval, last_sent) in self._msg_timers.items():
+            # While the autopilot drives, stay off the bus for control messages so we don't fight it.
+            if self._autopilot_enabled and msg_name in REQUIRED_MESSAGES:
+                continue
             if now - last_sent >= interval:
                 method = getattr(self._can_net, MESSAGE_SENDERS[msg_name], None)
                 if method is not None:
                     try:
-                        method(self._control)
+                        if msg_name == "AUTOPILOT":
+                            method(self._autopilot_enabled)
+                        else:
+                            method(self._control)
                     except Exception as e:
                         print(f"[CAN] Failed to send {msg_name}: {e}")
                 else:
@@ -146,6 +153,11 @@ class KeyboardSenderControl(object):
             elif event.type == pygame.KEYUP:
                 if self._is_quit_shortcut(event.key):
                     return True
+                elif event.key == K_p:
+                    self._autopilot_enabled = not self._autopilot_enabled
+                    # Event-driven: announce the change right away instead of waiting for the next cycle.
+                    can_network.send_autopilot_msg(self._autopilot_enabled)
+                    print(f"[CAN] Autopilot {'engaged' if self._autopilot_enabled else 'disengaged'}")
                 elif event.key == K_o:
                     try:
                         can_network.send_switch_door_state_msg()
@@ -213,7 +225,7 @@ class KeyboardSenderControl(object):
         return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
 
-def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
+def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None, start_in_autopilot=False):
     print("Starting keyboard parser loop")
     pygame.init()
     pygame.font.init()
@@ -240,6 +252,7 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
         (pygame.K_w, "W", "Move Forward"),
         (pygame.K_i, "I", "Interior Light"),
         (pygame.K_o, "O", "Doors"),
+        (pygame.K_p, "P", "Autopilot"),
         (pygame.K_a, "A", "Move Left"),
         (pygame.K_s, "S", "Brake"),
         (pygame.K_d, "D", "Move Right"),
@@ -263,6 +276,7 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
         "W": (2, 1),
         "I": (8, 1),
         "O": (9, 1),
+        "P": (10, 1),
         "A": (1.5, 2),
         "S": (2.5, 2),
         "D": (3.5, 2),
@@ -362,7 +376,7 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
     pygame.display.flip()
 
     can_net = can_network.CAN_Network(dbc_path=dbc_path, channel=vcan_channel)
-    controller = KeyboardSenderControl(can_net)
+    controller = KeyboardSenderControl(can_net, start_in_autopilot)
     scheduled = [f"{name}({int(iv[0] * 1000)}ms)" for name, iv in sorted(controller._msg_timers.items())]
     print(f"[CAN] DBC loaded: {dbc_path}")
     print(f"[CAN] Periodic messages scheduled: {' '.join(scheduled)}")
@@ -382,7 +396,9 @@ def keyboard_parser_loop(dbc_path="data/carla.dbc", vcan_channel=None):
             y = int(y_frac * HEIGHT)
             w = int(w_frac * WIDTH)
             h = int(h_frac * HEIGHT)
-            pressed_state[key_code] = pygame.key.get_pressed()[key_code]
+            pressed_state[key_code] = pygame.key.get_pressed()[key_code] or (
+                key_code == pygame.K_p and controller._autopilot_enabled
+            )
             color = GREEN if pressed_state[key_code] else GRAY
             pygame.draw.rect(screen, color, (x, y, w, h), border_radius=8)
             label_surf = font.render(label, True, BLACK)
@@ -407,6 +423,7 @@ def print_key_bindings():
         (", (comma)",    "Gear down  [manual mode]"),
         (". (period)",   "Gear up    [manual mode]"),
         ("O",            "Toggle door open/close"),
+        ("P",            "Toggle autopilot (driven over CAN by the CARLA client)"),
         ("L",            "Cycle lights: off → position → low beam → fog"),
         ("Shift + L",    "Toggle high beam"),
         ("Ctrl  + L",    "Toggle special light 1"),
@@ -439,6 +456,12 @@ def main():
         default=VCAN_CHANNEL,
         help=f"Virtual CAN interface name (default: {VCAN_CHANNEL})",
     )
+    parser.add_argument(
+        "-a",
+        "--autopilot",
+        action="store_true",
+        help="Start with the autopilot engaged",
+    )
     args = parser.parse_args()
 
     # Ensure SIGTERM (e.g. from environment_down.sh) also exits cleanly
@@ -447,7 +470,7 @@ def main():
     print("Sending commands through CAN bus")
     print_key_bindings()
     try:
-        keyboard_parser_loop(dbc_path=args.dbc, vcan_channel=args.vcan)
+        keyboard_parser_loop(dbc_path=args.dbc, vcan_channel=args.vcan, start_in_autopilot=args.autopilot)
     except (KeyboardInterrupt, SystemExit):
         print("\nCancelled by user. Bye!")
         pygame.quit()

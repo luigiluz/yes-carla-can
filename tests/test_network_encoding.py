@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from can_network.network import CAN_Network
-from constants import FULL_DBC, SENSOR_DBC
+from constants import AUTOPILOT_DBC, FULL_DBC, SENSOR_DBC
 
 
 # ---------------------------------------------------------------------------
@@ -363,3 +363,80 @@ def test_radar_target_encoding_round_trip(sensor_net_and_bus, velocity, azimuth,
     assert decoded["RADAR_AZI_signal"]   == pytest.approx(azimuth,   abs=0.01)
     assert decoded["RADAR_ALT_signal"]   == pytest.approx(altitude,  abs=0.01)
     assert decoded["RADAR_DEPTH_signal"] == pytest.approx(depth,     abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Periodic control sending (used by the CAN-routed autopilot)
+# ---------------------------------------------------------------------------
+
+
+def _control_values():
+    controls = MagicMock()
+    controls.throttle, controls.steer, controls.brake = 0.5, 0.0, 0.0
+    controls.hand_brake, controls.reverse, controls.manual_gear_shift = False, False, False
+    controls.gear = 1
+    return controls
+
+
+def test_periodic_controls_first_call_sends_all_control_messages(net_and_bus):
+    """The first call sends every control message exactly once, and nothing else."""
+    net, mock_bus = net_and_bus
+    with patch("can_network.network.time.time", return_value=1000.0):
+        net.send_periodic_controls(_control_values())
+    sent_ids = sorted(c[0][0].arbitration_id for c in mock_bus.send.call_args_list)
+    assert sent_ids == [1536, 1537, 1538, 1539, 1540, 1542, 1543]
+
+
+def test_periodic_controls_respects_cycle_times(net_and_bus):
+    """After 150 ms only the 100 ms messages (THROTTLE, BRAKE, STEER) are due again."""
+    net, mock_bus = net_and_bus
+    with patch("can_network.network.time.time", return_value=1000.0):
+        net.send_periodic_controls(_control_values())
+    mock_bus.send.reset_mock()
+    with patch("can_network.network.time.time", return_value=1000.15):
+        net.send_periodic_controls(_control_values())
+    sent_ids = sorted(c[0][0].arbitration_id for c in mock_bus.send.call_args_list)
+    assert sent_ids == [1536, 1537, 1538]
+
+
+# ---------------------------------------------------------------------------
+# Autopilot engage message
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def autopilot_net_and_bus(tmp_path):
+    """Return a (CAN_Network, mock_bus) pair backed by a DBC that includes AUTOPILOT."""
+    p = tmp_path / "autopilot.dbc"
+    p.write_text(AUTOPILOT_DBC)
+    mock_bus = MagicMock()
+    with patch("can.ThreadSafeBus", return_value=mock_bus):
+        net = CAN_Network(dbc_path=str(p), channel="vcan0")
+    return net, mock_bus
+
+
+@pytest.mark.parametrize("engaged, expected_byte", [(True, 1), (False, 0)])
+def test_autopilot_encoding(autopilot_net_and_bus, engaged, expected_byte):
+    """send_autopilot_msg encodes the engage state on ID 1541."""
+    net, mock_bus = autopilot_net_and_bus
+    net.send_autopilot_msg(engaged)
+    assert mock_bus.send.call_args[0][0].arbitration_id == 1541
+    assert _decode_last_sent(net, mock_bus)["AUTOPILOT_signal"] == expected_byte
+
+
+def test_recv_autopilot_sets_engaged_and_timestamp(autopilot_net_and_bus):
+    """An AUTOPILOT=1 frame marks the autopilot as engaged and records when it was seen."""
+    net, mock_bus = autopilot_net_and_bus
+    frame = net._build_msg("AUTOPILOT", 1)
+    with patch("can_network.network.time.time", return_value=1234.0):
+        _recv_one_frame(net, mock_bus, frame)
+    assert net.autopilot_engaged is True
+    assert net.autopilot_last_seen == 1234.0
+
+
+def test_periodic_controls_ignores_autopilot_message(autopilot_net_and_bus):
+    """AUTOPILOT is owned by the vehicle controls module; the autopilot's periodic sender never sends it."""
+    net, mock_bus = autopilot_net_and_bus
+    with patch("can_network.network.time.time", return_value=1000.0):
+        net.send_periodic_controls(_control_values())
+    assert 1541 not in [c[0][0].arbitration_id for c in mock_bus.send.call_args_list]

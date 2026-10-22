@@ -29,6 +29,11 @@ try:
 except IndexError:
     pass
 
+# CARLA's client-side navigation agents (BehaviorAgent) used by the CAN-routed autopilot.
+sys.path.append(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "carla-0-9-15", "PythonAPI", "carla")
+)
+
 import tkinter as tk
 
 import carla
@@ -83,12 +88,6 @@ def game_loop(args):
             traffic_manager = client.get_trafficmanager()
             traffic_manager.set_synchronous_mode(True)
 
-        if args.autopilot and not sim_world.get_settings().synchronous_mode:
-            print(
-                "WARNING: You are currently in asynchronous mode and could "
-                "experience some issues with the traffic simulation"
-            )
-
         display = pygame.display.set_mode(
             (width / 2, height / 2), pygame.HWSURFACE | pygame.DOUBLEBUF
         )
@@ -97,7 +96,7 @@ def game_loop(args):
 
         hud = HUD(width / 2, height / 2)
         world = World(sim_world, hud, args, can_bus)
-        controller = KeyboardControl(world, args.autopilot)
+        controller = KeyboardControl(world)
 
         if args.sync:
             sim_world.tick()
@@ -179,9 +178,6 @@ def main():
         help="TCP port to listen to (default: 2000)",
     )
     argparser.add_argument(
-        "-a", "--autopilot", action="store_true", help="enable autopilot"
-    )
-    argparser.add_argument(
         "--res",
         metavar="WIDTHxHEIGHT",
         default="1280x720",
@@ -225,6 +221,11 @@ def main():
         default=None,
         help='CARLA map to load (e.g. "Town01", "Town10HD"). '
              'If not set, the current world is used.',
+    )
+    argparser.add_argument(
+        "--avtp",
+        action="store_true",
+        help="Stream the front RGB camera over AVTP (requires the AVTP virtual network)",
     )
     args = argparser.parse_args()
 

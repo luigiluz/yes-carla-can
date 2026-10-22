@@ -8,7 +8,6 @@ Use ARROWS or WASD keys for control.
     A/D          : steer left/right
     Q            : toggle reverse
     Space        : hand-brake
-    P            : toggle autopilot
     M            : toggle manual transmission
     ,/.          : gear up/down
     CTRL + W     : toggle constant velocity mode at 60 km/h
@@ -50,6 +49,7 @@ import os
 import carla
 import pygame
 
+from gui.can_traffic_display import CANTrafficDisplay
 from gui.functions import *
 from gui.text import *
 
@@ -74,6 +74,9 @@ class HUD(object):
 
         self._show_ackermann_info = False
         self._ackermann_control = carla.VehicleAckermannControl()
+
+        # Set by KeyboardControl while the CAN-routed autopilot is driving.
+        self.autopilot = False
 
     def on_world_tick(self, timestamp):
         self._server_clock.tick()
@@ -200,5 +203,12 @@ class HUD(object):
                     surface = self._font_mono.render(item, True, (255, 255, 255))
                     display.blit(surface, (8, v_offset))
                 v_offset += line_height
+        if self.autopilot:
+            # Badge in the top-right of the camera view, just left of the CAN traffic panel; drawn regardless of F1.
+            label = self._font_mono.render('AUTOPILOT', True, (0, 0, 0))
+            badge = label.get_rect().inflate(28, 12)
+            badge.topright = (self.dim[0] - CANTrafficDisplay.PANEL_WIDTH - 8, 8)
+            pygame.draw.rect(display, (0, 230, 100), badge, border_radius=8)
+            display.blit(label, label.get_rect(center=badge.center))
         self._notifications.render(display)
         self.help.render(display)
