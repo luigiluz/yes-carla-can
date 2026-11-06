@@ -33,8 +33,9 @@ import carla
 import pygame
 
 import can_network
+from can_network.bus_config import CAN_INTERFACE
 from can_network.network import VCAN_CHANNEL
-from gui import HUD, KeyboardControl, World
+from gui import HUD, AttackTerminalPanel, KeyboardControl, World
 
 
 def game_loop(args):
@@ -56,6 +57,15 @@ def game_loop(args):
     powertrain_ecu, comfort_ecu = bundle.powertrain, bundle.comfort
     powertrain_display, comfort_display = bundle.powertrain_display, bundle.comfort_display
     ids_panel = bundle.ids_panel
+
+    # In-window attacker (press K). On neovi the device is exclusive and already open, so the
+    # terminal injects through the client's shared bus; on vcan it opens its own bus.
+    physical_bus = bundle.powertrain.bus if CAN_INTERFACE == "neovi" else None
+    attack_terminal = AttackTerminalPanel(
+        physical_bus=physical_bus,
+        powertrain_channel=args.powertrain_channel,
+        comfort_channel=args.comfort_channel,
+    )
 
     try:
         client = carla.Client(args.host, args.port)
@@ -107,13 +117,15 @@ def game_loop(args):
                 sim_world.tick()
             clock.tick_busy_loop(60)
             bundle.poll()
-            if controller.parse_events(client, world, clock, args.sync, powertrain_ecu, comfort_ecu, ids_panel):
+            if controller.parse_events(client, world, clock, args.sync, powertrain_ecu, comfort_ecu,
+                                       ids_panel, attack_terminal):
                 return
             world.tick(clock)
             world.render(display)
             powertrain_display.render(display, slot=0, total_slots=3)
             comfort_display.render(display, slot=1, total_slots=3)
             ids_panel.render(display, slot=2, total_slots=3)
+            attack_terminal.render(display)
             pygame.display.flip()
 
     finally:
@@ -125,6 +137,12 @@ def game_loop(args):
                 world.destroy()
             except Exception:
                 pass
+
+        # Stop any running attack before the bus it uses is torn down.
+        try:
+            attack_terminal.stop()
+        except Exception:
+            pass
 
         bundle.shutdown()
 

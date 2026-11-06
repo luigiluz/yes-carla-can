@@ -29,6 +29,7 @@ try:
         K_g,
         K_h,
         K_i,
+        K_k,
         K_n,
         K_p,
         K_q,
@@ -67,8 +68,18 @@ class KeyboardControl(object):
         self._steer_cache = 0.0
         world.hud.notification("Press 'H' or '?' for help.", seconds=4.0)
 
-    def parse_events(self, client, world, clock, sync_mode, powertrain_ecu, comfort_ecu, ids_panel=None):
+    def parse_events(self, client, world, clock, sync_mode, powertrain_ecu, comfort_ecu,
+                     ids_panel=None, attack_terminal=None):
         for event in pygame.event.get():
+            # While the attack terminal has focus it owns the keyboard: route typing to it and
+            # swallow everything else (the bindings below fire on KEYUP, so without this a typed
+            # 'c'/'p'/'h' would also change weather / toggle autopilot / open help).
+            if attack_terminal is not None and attack_terminal.focused:
+                if event.type == pygame.QUIT:
+                    return True
+                if event.type == pygame.KEYDOWN:
+                    attack_terminal.handle_key(event)
+                continue
             if event.type == pygame.QUIT:
                 return True
             elif event.type == pygame.KEYUP:
@@ -81,6 +92,9 @@ class KeyboardControl(object):
                     )
                 elif event.key == K_u and ids_panel is not None:
                     world.hud.notification(f"IDS: {ids_panel.cycle()}")
+                elif event.key == K_k and attack_terminal is not None:
+                    opened = attack_terminal.toggle()
+                    world.hud.notification(f"Attack terminal {'opened' if opened else 'closed'}")
                 elif event.key == K_BACKSPACE:
                     if self._autopilot_enabled:
                         world.player.set_autopilot(False)
