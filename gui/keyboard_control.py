@@ -80,6 +80,11 @@ class KeyboardControl(object):
                 if event.type == pygame.KEYDOWN:
                     attack_terminal.handle_key(event)
                 continue
+            # When the terminal just closed (Ctrl+C / 'exit'), eat the trailing KEYUP so the
+            # release of the close combo doesn't leak into a binding below (e.g. 'c' weather).
+            if (attack_terminal is not None and event.type == pygame.KEYUP
+                    and attack_terminal.take_pending_keyup_swallow()):
+                continue
             if event.type == pygame.QUIT:
                 return True
             elif event.type == pygame.KEYUP:

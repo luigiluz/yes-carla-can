@@ -78,8 +78,9 @@ class AttackTerminalPanel:
 
         self._own_bus = None
         self._own_channel = None
+        self._swallow_next_keyup = False
 
-        self._print("type 'list' for features, 'stop' to end, Esc to close")
+        self._print("type 'list' for features, 'stop' to end, Ctrl+C or 'exit' to close")
 
     # ------------------------------------------------------------------
     # Input handling (called from the pygame main thread while focused)
@@ -90,8 +91,30 @@ class AttackTerminalPanel:
         self.focused = self.visible
         return self.visible
 
+    def _close(self):
+        """Stop any running attack and hide the panel. Flags the next KEYUP to be swallowed
+        by keyboard_control so the release of the close combo can't leak into a client
+        binding (e.g. Ctrl+C's 'c' KEYUP changing the weather)."""
+        self.stop_attack()
+        self.visible = False
+        self.focused = False
+        self._swallow_next_keyup = True
+
+    def take_pending_keyup_swallow(self):
+        swallow = self._swallow_next_keyup
+        self._swallow_next_keyup = False
+        return swallow
+
     def handle_key(self, event):
         key = event.key
+        # Ctrl+C closes + stops (mirrors the CLI). Function keys like F10 are intercepted by
+        # the desktop environment as media/brightness keys and never reach pygame, so they
+        # can't be used. Esc is swallowed (below) so it can't reach the client's quit shortcut.
+        if key == pygame.K_c and (event.mod & pygame.KMOD_CTRL):
+            self._close()
+            return
+        if key == pygame.K_ESCAPE:
+            return
         if key == pygame.K_RETURN:
             line = self._input
             self._input = ""
@@ -102,9 +125,6 @@ class AttackTerminalPanel:
             self.run(line)
         elif key == pygame.K_BACKSPACE:
             self._input = self._input[:-1]
-        elif key == pygame.K_ESCAPE:
-            self.visible = False
-            self.focused = False
         elif key == pygame.K_UP:
             if self._history:
                 self._hist_idx = max(0, self._hist_idx - 1)
@@ -127,6 +147,9 @@ class AttackTerminalPanel:
         if not line:
             return
         cmd = line.lower()
+        if cmd in ("exit", "close", "quit"):
+            self._close()
+            return
         if cmd == "stop":
             self.stop_attack()
             return
@@ -327,6 +350,8 @@ class AttackTerminalPanel:
         pygame.draw.line(display, self.ACCENT, (x, prompt_y - 4), (x + w, prompt_y - 4), 1)
         prompt = self._font.render(f"attack> {self._input}{cursor}", True, self.TEXT)
         display.blit(prompt, (x + pad, prompt_y))
+        hint = self._font.render("Ctrl+C / 'exit' to close", True, self.DIM)
+        display.blit(hint, (x + w - hint.get_width() - pad, prompt_y))
 
         top = divider_y + 6
         max_chars = max(10, (w - 2 * pad) // 9)

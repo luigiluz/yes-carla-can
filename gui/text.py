@@ -40,7 +40,8 @@ Use ARROWS or WASD keys for control.
 
     I            : arm/disarm IDS (CARLA client window)
     U            : switch IDS detector (CARLA client window)
-    K            : toggle attack terminal (CARLA client window)
+    K            : open attack terminal (CARLA client window)
+    CTRL + C     : stop attack and close the attack terminal (or type 'exit')
 
     F1           : toggle HUD
     F11          : toggle fullscreen
