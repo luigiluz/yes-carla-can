@@ -109,6 +109,8 @@ class KeyboardControl(object):
                         world.rgb_camera_sensor.toggle_camera()
                         status = "Ligada" if world.rgb_camera_sensor.enabled else "Desligada"
                         world.hud.notification(f"Câmera AVTP {status}")
+                    else:
+                        world.hud.notification("AVTP disabled (start with --avtp)")
 
                 elif event.key == K_g:
                     world.toggle_radar()

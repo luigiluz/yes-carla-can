@@ -6,11 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DBC_PATH="${DBC_PATH:-data/carla.dbc}"
 VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
 MAP="${MAP:-}"
+AVTP="${AVTP:-0}"
 AVTP_DIR="${SCRIPT_DIR}/avtp_network"
 
 usage() {
     cat <<EOF
-Usage: $0 [-h|--help] [--dbc <path>] [--vcan <name>] [--map <name>]
+Usage: $0 [-h|--help] [--dbc <path>] [--vcan <name>] [--map <name>] [--avtp]
 
 Start the "Yes, CARLA CAN" simulation environment.
 
@@ -30,6 +31,8 @@ Options:
   --vcan <name>   Name of the virtual CAN interface to create (default: vcan0)
   --map <name>    CARLA map to load in the client (e.g. Town01, Town10HD).
                   If omitted, the client uses the map currently loaded by CARLA.
+  --avtp          Enable the AVTP camera stream (virtual Ethernet network + hood
+                  camera sent over IEEE 1722). Disabled by default.
 
 Environment variables:
   CARLA_FOLDER_NAME     Directory where CARLA is installed (default: carla-0-9-15)
@@ -37,6 +40,7 @@ Environment variables:
   DBC_PATH              DBC file path, overridden by --dbc if provided
   VCAN_INTERFACE        Virtual CAN interface name, overridden by --vcan if provided (default: vcan0)
   MAP                   CARLA map name, overridden by --map if provided
+  AVTP                  Set to 1 to enable the AVTP camera stream (same as --avtp)
   VK_ICD_FILENAMES      Force a specific Vulkan ICD file (skips auto-detection)
 EOF
 }
@@ -48,6 +52,7 @@ while [[ $# -gt 0 ]]; do
         --dbc) DBC_PATH="$2"; shift 2 ;;
         --vcan) VCAN_INTERFACE="$2"; shift 2 ;;
         --map) MAP="$2"; shift 2 ;;
+        --avtp) AVTP=1; shift ;;
         *) echo "Unknown argument: $1"; usage; exit 1 ;;
     esac
 done
@@ -91,14 +96,18 @@ fi
 echo "Starting CARLA simulator..."
 ./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality-level=Low -nosound 2>/dev/null &
 
-echo "Setting up AVTP virtual network..."
-sudo bash "${AVTP_DIR}/setup.sh" --capture
+if [[ "${AVTP}" -eq 1 ]]; then
+    echo "Setting up AVTP virtual network..."
+    sudo bash "${AVTP_DIR}/setup.sh" --capture
 
-# 3. Mover a ponta veth-s para o Host (permite ao CARLA rodar no Host com acesso ao AVTP L2)
-echo "Exposing AVTP sender interface to Host..."
-sudo ip netns exec sender ip link set veth-s netns 1
-sleep 1
-sudo ip link set dev veth-s up 
+    # Mover a ponta veth-s para o Host (permite ao CARLA rodar no Host com acesso ao AVTP L2)
+    echo "Exposing AVTP sender interface to Host..."
+    sudo ip netns exec sender ip link set veth-s netns 1
+    sleep 1
+    sudo ip link set dev veth-s up
+else
+    echo "AVTP disabled (use --avtp to enable the camera stream)."
+fi
 
 
 
@@ -131,20 +140,25 @@ if [[ -n "${MAP}" ]]; then
     echo "Requesting CARLA map: ${MAP}"
     CLIENT_ARGS+=(--map "${MAP}")
 fi
+if [[ "${AVTP}" -eq 1 ]]; then
+    CLIENT_ARGS+=(--avtp)
+fi
 
-# Executar os módulos Python no Host com sudo -E (Acesso a vcan0 + veth-s Socket RAW + localhost)
-echo ""
-echo "======================================================================"
-echo " INFRAESTRUTURA DE REDE E CARLA PRONTOS!"
-echo " Agora, abra OUTRO terminal e inicie o RECEIVER:"
-echo ""
-echo "   xhost +local:sudo "
-echo ""
-echo ""
-echo "   sudo -E DISPLAY=\$DISPLAY PYTHONPATH=. ip netns exec receiver \"\$CONDA_PREFIX/bin/python\" avtp_network/receiver.py -i veth-r -o ."
-echo ""
-echo "======================================================================"
-read -p "Pressione [ENTER] AQUI após iniciar o receiver para subir os clientes do CARLA..."
+if [[ "${AVTP}" -eq 1 ]]; then
+    # Executar os módulos Python no Host com sudo -E (Acesso a vcan0 + veth-s Socket RAW + localhost)
+    echo ""
+    echo "======================================================================"
+    echo " INFRAESTRUTURA DE REDE E CARLA PRONTOS!"
+    echo " Agora, abra OUTRO terminal e inicie o RECEIVER:"
+    echo ""
+    echo "   xhost +local:sudo "
+    echo ""
+    echo ""
+    echo "   sudo -E DISPLAY=\$DISPLAY PYTHONPATH=. ip netns exec receiver \"\$CONDA_PREFIX/bin/python\" avtp_network/receiver.py -i veth-r -o ."
+    echo ""
+    echo "======================================================================"
+    read -p "Pressione [ENTER] AQUI após iniciar o receiver para subir os clientes do CARLA..."
+fi
 
 # Executar os módulos Python no Host
 echo "Starting CARLA client module..."

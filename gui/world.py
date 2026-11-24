@@ -34,6 +34,7 @@ class World(object):
         self._actor_filter = args.filter
         self._actor_generation = args.generation
         self._gamma = args.gamma
+        self.avtp = getattr(args, 'avtp', False)
         self.restart()
         self.world.on_tick(hud.on_world_tick)
         self.recording_enabled = False
@@ -111,7 +112,8 @@ class World(object):
         self.camera_manager = CameraManager(self.player, self.hud, self._gamma)
         self.camera_manager.transform_index = cam_pos_index
         self.camera_manager.set_sensor(cam_index, notify=False)
-        self.rgb_camera_sensor = RGBCameraSensor(self.player, self._gamma)
+        if self.avtp:
+            self.rgb_camera_sensor = RGBCameraSensor(self.player, self._gamma)
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
 
