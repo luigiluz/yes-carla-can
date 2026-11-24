@@ -117,6 +117,13 @@ if [[ "${AVTP}" -eq 1 ]]; then
     sudo ip netns exec sender ip link set veth-s netns 1
     sleep 1
     sudo ip link set dev veth-s up
+
+    # Mover também a ponta veth-r para o Host: o receiver roda no Host e
+    # enxerga ao mesmo tempo o vcan0 e o veth-r (a bridge br0 continua no ns switch)
+    echo "Exposing AVTP receiver interface to Host..."
+    sudo ip netns exec receiver ip link set veth-r netns 1
+    sleep 1
+    sudo ip link set dev veth-r up
 else
     echo "AVTP disabled (use --avtp to enable the camera stream)."
 fi
@@ -171,7 +178,7 @@ if [[ "${AVTP}" -eq 1 ]]; then
     echo "   xhost +local:sudo "
     echo ""
     echo ""
-    echo "   sudo -E DISPLAY=\$DISPLAY PYTHONPATH=. ip netns exec receiver \"\$CONDA_PREFIX/bin/python\" avtp_network/receiver.py -i veth-r -o ."
+    echo "   sudo -E DISPLAY=\$DISPLAY PYTHONPATH=. \"\$CONDA_PREFIX/bin/python\" avtp_network/receiver.py -i veth-r -o ${RUN_DIR}"
     echo ""
     echo "======================================================================"
     read -p "Pressione [ENTER] AQUI após iniciar o receiver para subir os clientes do CARLA..."
