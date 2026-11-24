@@ -8,6 +8,7 @@ VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
 MAP="${MAP:-}"
 AVTP="${AVTP:-0}"
 AVTP_DIR="${SCRIPT_DIR}/avtp_network"
+LOGS_DIR="${SCRIPT_DIR}/traffic_logs"
 
 usage() {
     cat <<EOF
@@ -23,6 +24,11 @@ What this script does:
   4. Waits 5 seconds for CARLA to initialise
   5. Starts the CARLA client module (spawns the vehicle and sensors)
   6. Starts the vehicle controls module (translates vehicle state into CAN frames)
+
+Every run writes its logs to traffic_logs/run_<YYYYmmdd_HHMMSS>/:
+  can.log        candump of the main CAN bus (always)
+  avtp.pcap      AVTP frames captured on the virtual switch (--avtp only)
+  tcpdump.log    tcpdump messages (--avtp only)
 
 Options:
   -h, --help      Show this help message and exit
@@ -96,9 +102,15 @@ fi
 echo "Starting CARLA simulator..."
 ./${CARLA_FOLDER_NAME}/CarlaUE4.sh -RenderOffScreen -quality-level=Low -nosound 2>/dev/null &
 
+# Per-run log folder (CAN + AVTP logs of the same run live together)
+RUN_DIR="${LOGS_DIR}/run_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "${RUN_DIR}"
+echo "${RUN_DIR}" > "${LOGS_DIR}/.current_run"
+echo "Logs for this run: ${RUN_DIR}"
+
 if [[ "${AVTP}" -eq 1 ]]; then
     echo "Setting up AVTP virtual network..."
-    sudo bash "${AVTP_DIR}/setup.sh" --capture
+    sudo bash "${AVTP_DIR}/setup.sh" --capture --capture-dir "${RUN_DIR}"
 
     # Mover a ponta veth-s para o Host (permite ao CARLA rodar no Host com acesso ao AVTP L2)
     echo "Exposing AVTP sender interface to Host..."
@@ -126,6 +138,11 @@ sudo ip link add dev vcan1 type vcan
 sudo ip link set up vcan1
 sudo cangw -A -s vcan1 -d "${VCAN_INTERFACE}" -e 2>/dev/null || true
 sudo cangw -A -s "${VCAN_INTERFACE}" -d vcan1 -e 2>/dev/null || true
+
+# Record the main CAN bus for the whole run
+echo "Recording CAN traffic on ${VCAN_INTERFACE} -> ${RUN_DIR}/can.log"
+candump -x "${VCAN_INTERFACE}" -f "${RUN_DIR}/can.log" &
+echo $! > "${LOGS_DIR}/.candump.pid"
 
 
 
@@ -168,3 +185,4 @@ echo "Starting vehicle controls module..."
 sudo "${PYTHON_EXEC}" "${SCRIPT_DIR}/vehicle_controls_module.py" --dbc "${DBC_PATH}" --vcan "${VCAN_INTERFACE}" &
 
 echo "Environment is completely up!"
+echo "Logs for this run: ${RUN_DIR}"

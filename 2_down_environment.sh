@@ -11,7 +11,9 @@ What this script does:
   2. Stops the CARLA client module (waits up to 10 seconds for a clean exit)
   3. Stops the CARLA simulator
   4. Removes the vxcan bridge (can-gw routes, vcan1)
-  5. Removes the virtual CAN bus (vcan0) and unloads the vcan/can-gw kernel modules
+  5. Stops the CAN recorder (candump) of the current run
+  6. Removes the virtual CAN bus (vcan0) and unloads the vcan/can-gw kernel modules
+  7. Tears down the AVTP virtual network (and its packet capture), only if it exists
 
 Options:
   -h, --help    Show this help message and exit
@@ -28,6 +30,15 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AVTP_DIR="${SCRIPT_DIR}/avtp_network"
 VCAN_INTERFACE="${VCAN_INTERFACE:-vcan0}"
+LOGS_DIR="${SCRIPT_DIR}/traffic_logs"
+
+# AVTP is opt-in (1_up_environment.sh --avtp). Detect whether this run used it
+# by checking for its network namespaces, so a run without AVTP is not touched.
+if ip netns list 2>/dev/null | grep -qwE "sender|switch|receiver"; then
+    AVTP_ACTIVE=1
+else
+    AVTP_ACTIVE=0
+fi
 
 # Stop vehicle controls module
 echo "Stopping vehicle controls module..."
@@ -63,14 +74,16 @@ else
 fi
 
 
-# Stop AVTP Receiver (caso esteja a rodar em background ou num terminal)
-echo "Stopping AVTP receiver..."
-RECEIVER_PID=$(pgrep -d ' ' -f "receiver.py")
-if [ -n "$RECEIVER_PID" ]; then
-    kill $RECEIVER_PID 2>/dev/null || true
-    echo "AVTP receiver (PID $RECEIVER_PID) stopped."
-else
-    echo "AVTP receiver process not found."
+if [ "$AVTP_ACTIVE" -eq 1 ]; then
+    # Stop AVTP Receiver (caso esteja a rodar em background ou num terminal)
+    echo "Stopping AVTP receiver..."
+    RECEIVER_PID=$(pgrep -d ' ' -f "receiver.py")
+    if [ -n "$RECEIVER_PID" ]; then
+        kill $RECEIVER_PID 2>/dev/null || true
+        echo "AVTP receiver (PID $RECEIVER_PID) stopped."
+    else
+        echo "AVTP receiver process not found."
+    fi
 fi
 
 
@@ -85,6 +98,20 @@ else
     echo "CARLA process not found."
 fi
 
+# Stop the CAN recorder before removing the bus
+echo "Stopping CAN recorder..."
+if [ -f "${LOGS_DIR}/.candump.pid" ]; then
+    CANDUMP_PID=$(cat "${LOGS_DIR}/.candump.pid")
+    if kill "$CANDUMP_PID" 2>/dev/null; then
+        echo "candump (PID $CANDUMP_PID) stopped."
+    else
+        echo "candump process not found."
+    fi
+    rm -f "${LOGS_DIR}/.candump.pid"
+else
+    echo "candump pid file not found."
+fi
+
 # Bring virtual CAN bus down
 echo "Bringing virtual CAN bus down..."
 sudo cangw -D -s vcan1 -d "${VCAN_INTERFACE}" -e 2>/dev/null || true
@@ -97,15 +124,20 @@ sudo modprobe -r can-gw 2>/dev/null || true
 sudo modprobe -r vcan
 
 
-# Limpa a rede virtual AVTP e o namespace
-echo "Tearing down AVTP virtual network..."
-if [ -f "${AVTP_DIR}/setup.sh" ]; then
-    sudo bash "${AVTP_DIR}/setup.sh" --teardown
-else
-    # Fallback caso o setup.sh não seja encontrado
-    sudo ip netns delete sender 2>/dev/null || true
-    sudo ip netns delete receiver 2>/dev/null || true
-    sudo ip netns delete switch 2>/dev/null || true
+if [ "$AVTP_ACTIVE" -eq 1 ]; then
+    # Limpa a rede virtual AVTP e o namespace
+    echo "Tearing down AVTP virtual network..."
+    if [ -f "${AVTP_DIR}/setup.sh" ]; then
+        sudo bash "${AVTP_DIR}/setup.sh" --teardown
+    else
+        # Fallback caso o setup.sh não seja encontrado
+        sudo ip netns delete sender 2>/dev/null || true
+        sudo ip netns delete receiver 2>/dev/null || true
+        sudo ip netns delete switch 2>/dev/null || true
+    fi
 fi
 
+if [ -f "${LOGS_DIR}/.current_run" ]; then
+    echo "Logs for this run: $(cat "${LOGS_DIR}/.current_run")"
+fi
 echo "Environment is down!"

@@ -16,11 +16,13 @@
 # Usage:
 #   sudo bash setup.sh              # bring up the virtual network
 #   sudo bash setup.sh --capture    # bring up + start tcpdump on br0
+#   sudo bash setup.sh --capture --capture-dir <dir>   # write capture files into <dir>
 #   sudo bash setup.sh --teardown   # destroy all namespaces / interfaces
 #
 # With --capture, all AVTP frames crossing the bridge are written to a
-# timestamped .pcap file in the current directory.  The capture runs until
-# --teardown is called or the process is killed manually.
+# timestamped .pcap file in the current directory.  With --capture-dir <dir>,
+# they are written to <dir>/avtp.pcap (tcpdump output in <dir>/tcpdump.log).
+# The capture runs until --teardown is called or the process is killed manually.
 #
 # After setup, run each script inside its respective namespace, e.g.:
 #   sudo ip netns exec receiver python3 receiver.py
@@ -36,13 +38,15 @@ NS_RECEIVER="receiver"
 # ── Argument parsing ──────────────────────────────────────────────────────────
 TEARDOWN=0
 CAPTURE=0
-for arg in "$@"; do
-    case $arg in
-        --teardown) TEARDOWN=1 ;;
-        --capture)  CAPTURE=1  ;;
+CAPTURE_DIR=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --teardown)    TEARDOWN=1; shift ;;
+        --capture)     CAPTURE=1;  shift ;;
+        --capture-dir) CAPTURE_DIR="$2"; shift 2 ;;
         *)
-            echo "Unknown argument: $arg"
-            echo "Usage: $0 [--capture] [--teardown]"
+            echo "Unknown argument: $1"
+            echo "Usage: $0 [--capture [--capture-dir <dir>]] [--teardown]"
             exit 1
             ;;
     esac
@@ -131,11 +135,19 @@ ip -n "$NS_SWITCH" link set br0 type bridge stp_state 0
 # ── Optional packet capture ───────────────────────────────────────────────────
 CAP_FILE=""
 if [[ $CAPTURE -eq 1 ]]; then
-    CAP_FILE="avtp_capture_$(date +"%Y-%m-%d_%H:%M:%S").pcap"
+    if [[ -n "$CAPTURE_DIR" ]]; then
+        mkdir -p "$CAPTURE_DIR"
+        CAP_FILE="$(cd "$CAPTURE_DIR" && pwd)/avtp.pcap"
+        TCPDUMP_LOG="$(dirname "$CAP_FILE")/tcpdump.log"
+    else
+        CAP_FILE="$(pwd)/avtp_capture_$(date +"%Y-%m-%d_%H:%M:%S").pcap"
+        TCPDUMP_LOG="/tmp/avtp_tcpdump.log"
+    fi
     echo "[*] Starting packet capture → $CAP_FILE"
+    # -Z root: keep root privileges so tcpdump can write into user-owned folders
     ip netns exec "$NS_SWITCH" \
-        tcpdump -i br0 -w "$(pwd)/$CAP_FILE" ether proto 0x22F0 \
-        > /tmp/avtp_tcpdump.log 2>&1 &
+        tcpdump -Z root -i br0 -w "$CAP_FILE" ether proto 0x22F0 \
+        > "$TCPDUMP_LOG" 2>&1 &
     echo $! > "$TCPDUMP_PID_FILE"
     echo "    tcpdump PID: $(cat $TCPDUMP_PID_FILE)"
 fi
