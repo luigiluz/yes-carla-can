@@ -145,8 +145,9 @@ if [[ $CAPTURE -eq 1 ]]; then
     fi
     echo "[*] Starting packet capture → $CAP_FILE"
     # -Z root: keep root privileges so tcpdump can write into user-owned folders
+    # -U: flush every packet to the file, so it can be followed live
     ip netns exec "$NS_SWITCH" \
-        tcpdump -Z root -i br0 -w "$CAP_FILE" ether proto 0x22F0 \
+        tcpdump -Z root -U -i br0 -w "$CAP_FILE" ether proto 0x22F0 \
         > "$TCPDUMP_LOG" 2>&1 &
     echo $! > "$TCPDUMP_PID_FILE"
     echo "    tcpdump PID: $(cat $TCPDUMP_PID_FILE)"

@@ -241,13 +241,37 @@ sudo -E DISPLAY=$DISPLAY PYTHONPATH=. "$CONDA_PREFIX/bin/python" \
 
 ## Inspecting the traffic
 
-Live view at the switch:
+Live view at the switch, in the terminal:
 
 ```bash
 sudo ip netns exec switch tcpdump -i br0 -e ether proto 0x22F0
 ```
 
-From the recorded capture:
+### Live in Wireshark
+
+While the environment is up with `--avtp`, Wireshark can show the stream live.
+Pick one of the following:
+
+```bash
+# 1. On a host interface: veth-r (receiver side) or veth-s (sender side)
+wireshark -k -i veth-r -f "ether proto 0x22F0"
+
+# 2. At the switch: br0 is inside the "switch" namespace, so pipe tcpdump in
+sudo ip netns exec switch tcpdump -i br0 -U -w - ether proto 0x22F0 | wireshark -k -i -
+
+# 3. Follow the capture file of the current run while it is being written
+tail -c +1 -f traffic_logs/run_<timestamp>/avtp.pcap | wireshark -k -i -
+```
+
+Option 1 needs root, or your user in the `wireshark` group
+(`sudo usermod -aG wireshark $USER`, then log in again). Without it, the
+Wireshark GUI shows "You don't have permission to capture on local interfaces"
+and hides `veth-r`/`veth-s` from the interface list. Once the permission is set,
+you can also just pick `veth-r` or `veth-s` on the Wireshark welcome screen. Use the display filter
+`ieee1722` to show only AVTP frames. The video stream produces a high
+frame rate, so pause the capture to inspect individual packets.
+
+### From the recorded capture
 
 ```bash
 tshark -r traffic_logs/run_<timestamp>/avtp.pcap -c 5
