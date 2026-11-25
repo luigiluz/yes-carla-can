@@ -24,9 +24,9 @@
 # they are written to <dir>/avtp.pcap (tcpdump output in <dir>/tcpdump.log).
 # The capture runs until --teardown is called or the process is killed manually.
 #
-# After setup, run each script inside its respective namespace, e.g.:
-#   sudo ip netns exec receiver python3 receiver.py
-#   sudo ip netns exec sender   python3 sender.py
+# 1_up_environment.sh --avtp then moves veth-s and veth-r to the host namespace:
+# the CARLA client sends the camera stream on veth-s and the vehicle controls
+# module receives it on veth-r, with br0 (switch ns) in between.
 #
 # =============================================================================
 set -euo pipefail
@@ -163,25 +163,20 @@ echo   "║  [receiver]─veth-r──veth-r-sw─┘                           
 echo   "║                                                                  ║"
 echo   "║  Layer 2 only — no IP addresses — EtherType 0x22F0 (AVTP)        ║"
 echo   "╠══════════════════════════════════════════════════════════════════╣"
-echo   "║  Activate the virtual environment first:                         ║"
-echo   "║    source .venv/bin/activate                                     ║"
+echo   "║  Normally started by: ./1_up_environment.sh --avtp               ║"
+echo   "║  (moves veth-s / veth-r to the host; the CARLA client sends on   ║"
+echo   "║   veth-s and the vehicle controls module receives on veth-r)     ║"
 echo   "║                                                                  ║"
-echo   "║  1. Start the receiver (in one terminal):                        ║"
-echo   "║    sudo ip netns exec receiver python3 receiver.py               ║"
-echo   "║                                                                  ║"
-echo   "║  2. Start the sender (in another terminal):                      ║"
-echo   "║    sudo ip netns exec sender python3 sender.py                   ║"
-echo   "║                                                                  ║"
-echo   "║  3. Inspect traffic at the switch (optional):                    ║"
+echo   "║  Inspect traffic at the switch (optional):                       ║"
 echo   "║    sudo ip netns exec switch \                                   ║"
 echo   "║      tcpdump -i br0 -e ether proto 0x22F0                        ║"
 echo   "║                                                                  ║"
 if [[ -n "$CAP_FILE" ]]; then
 echo   "╠══════════════════════════════════════════════════════════════════╣"
 echo   "║  Capture: ON                                                     ║"
-printf "║  File   : %-55s║\n" "$CAP_FILE"
+printf "║  File   : %-55s║\n" "$(basename "$CAP_FILE")"
 echo   "║  Stop   : sudo bash setup.sh --teardown  (kills tcpdump)         ║"
-echo   "║  Open   : wireshark $CAP_FILE                                    ║"
+echo   "║  Open   : wireshark <File>  (full path printed above)            ║"
 echo   "║                                                                  ║"
 fi      
 echo   "║  Teardown:                                                       ║"

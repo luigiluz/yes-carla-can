@@ -18,6 +18,7 @@ The platform is composed of the following modules:
 - **CAN DBC Network Configuration** — a DBC file (`data/carla.dbc`) that defines the message IDs, signal encoding, and transmission periods for the virtual network. It is the single source of truth for the CAN message schema used across all modules.
 - **CARLA Client Module** (`CARLA_client_module.py`) — connects to the CARLA simulator server, spawns the ego vehicle, and attaches the sensors used in the simulation: collision, GNSS, IMU, lane invasion, and radar.
 - **Vehicle Controls Module** (`vehicle_controls_module.py`) — captures keyboard inputs and translates them into CAN frames according to the DBC schema, publishing them onto `vcan0` to control the simulated vehicle.
+- **AVTP Camera Network** (optional, `--avtp`) — streams the ego vehicle's hood camera as H.264 over AVTP (IEEE 1722) on a virtual Ethernet network. The vehicle controls module receives it and passes it through a decision engine (`decision_engine.py`, currently a pass-through stub), forming a *camera → decision engine → vehicle controls* pipeline. See [`avtp_network/README.md`](avtp_network/README.md).
 - **Cyberattacks Module** (`cyberattacks_module.py`) — injects malicious CAN frames onto the bus. Supports Denial-of-Service (DoS) flooding and reverse-engineering-based feature spoofing (e.g. forcing hand brake or lights).
 - **Intrusion Detection Module** (`intrusion_detection_module.py`) — listens to `vcan0` in real time and applies statistical detection algorithms to identify anomalous traffic patterns and raise alerts.
 
@@ -37,11 +38,12 @@ The following section maps each of these modules to their corresponding files an
 yes-carla-can/
 │
 ├── 0_install_dependencies.sh     # Installs all system and Python dependencies
-├── 1_up_environment.sh           # Starts CARLA, vcan0, and the core modules
+├── 1_up_environment.sh           # Starts CARLA, vcan0, and the core modules (--avtp adds the camera network)
 ├── 2_down_environment.sh         # Tears down the simulation environment cleanly
 │
 ├── CARLA_client_module.py        # Connects to CARLA, spawns the ego vehicle and sensors
-├── vehicle_controls_module.py    # Translates keyboard input into CAN frames on vcan0
+├── vehicle_controls_module.py    # Translates keyboard input into CAN frames on vcan0 (+ AVTP receiver with --avtp)
+├── decision_engine.py            # Camera → decision engine → vehicle controls stage (pass-through stub)
 ├── cyberattacks_module.py        # CLI entry point for injecting attack traffic onto vcan0
 ├── intrusion_detection_module.py # CLI entry point for running IDS algorithms on vcan0
 │
@@ -50,6 +52,11 @@ yes-carla-can/
 ├── attacks/                      # Attack algorithm implementations
 │   ├── denial_of_service.py      #   DoS flooding attack
 │   └── reverse_engineering.py    #   Feature spoofing via reverse-engineered CAN IDs
+│
+├── avtp_network/                 # Optional AVTP (IEEE 1722) camera network, see avtp_network/README.md
+│   ├── setup.sh                  #   Virtual Ethernet network (namespaces + bridge) and packet capture
+│   ├── avtp.py                   #   AVTP MPEG-TS packet building and parsing
+│   └── receiver.py               #   AVTP stream receiver (used by the vehicle controls module)
 │
 ├── can_network/                  # CAN network abstraction layer
 │   ├── dbc.py                    #   DBC loading, validation, and message definitions
@@ -68,6 +75,7 @@ yes-carla-can/
 │   └── text.py                   #   Text rendering helpers
 │
 ├── sensors/                      # CARLA sensor wrappers
+│   ├── camera.py                 #   Hood camera streamed over AVTP (--avtp only)
 │   ├── collision.py              #   Collision sensor
 │   ├── gnss.py                   #   GNSS (GPS) sensor
 │   ├── imu.py                    #   IMU sensor
@@ -83,7 +91,11 @@ yes-carla-can/
 │   ├── conftest.py               #   Session fixtures (carla stub)
 │   ├── constants.py              #   Shared DBC content strings
 │   ├── test_dbc.py               #   Tests for DBC loading and validation rules
-│   └── test_network_encoding.py  #   Tests for CARLA↔CAN value encoding/decoding
+│   ├── test_network_encoding.py  #   Tests for CARLA↔CAN value encoding/decoding
+│   ├── test_avtp_receiver.py     #   Tests for AVTP packet reception and loss detection
+│   └── test_decision_engine.py   #   Tests for the decision engine stub
+│
+├── traffic_logs/                 # Per-run logs (run_<timestamp>/: can.log, AVTP capture and stream)
 │
 ├── carla-0-9-15/                 # CARLA 0.9.15 simulator installation (downloaded by script)
 │
@@ -214,13 +226,18 @@ You should see an output like the following, meaning that the environment was pr
 
 ```bash
 Starting CARLA simulator...
+Logs for this run: /path/to/yes-carla-can/traffic_logs/run_20261124_101500
+AVTP disabled (use --avtp to enable the camera stream).
 Setting up virtual CAN bus...
+Setting up attacker CAN bus and can-gw bridge...
+Recording CAN traffic on vcan0 -> /path/to/yes-carla-can/traffic_logs/run_20261124_101500/can.log
 Waiting for CARLA to start...
 4.26.2-0+++UE4+Release-4.26 522 0
 Disabling core dumps.
 Starting CARLA client module...
 Starting vehicle controls module...
-Environment is up!
+Environment is completely up!
+Logs for this run: /path/to/yes-carla-can/traffic_logs/run_20261124_101500
 ```
 
 After a few seconds, the keyboard and CARLA client window will properly appear.
@@ -289,10 +306,14 @@ VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json ./1_up_environment.sh
 
 Internally, `1_up_environment.sh`:
 1. Launches the **CARLA simulator** in headless, low-quality mode (`-RenderOffScreen -quality-level=Low`) to minimise resource usage.
-2. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module.
-3. Waits 5 seconds for CARLA to initialise.
-4. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the vehicle and sensors.
-5. Starts the **vehicle controls module** (`vehicle_controls_module.py`) — translates vehicle state into CAN frames and puts them on `vcan0`.
+2. Creates the **run log folder** `traffic_logs/run_<YYYYmmdd_HHMMSS>/` (see [Run logs](#run-logs)).
+3. With `--avtp` only: creates the **AVTP virtual Ethernet network** and starts capturing it.
+4. Creates the **virtual CAN bus** (`vcan0`) using the Linux kernel `vcan` module, and starts recording it with `candump` into the run folder.
+5. Waits 5 seconds for CARLA to initialise.
+6. Starts the **CARLA client module** (`CARLA_client_module.py`) — spawns the vehicle and sensors.
+7. Starts the **vehicle controls module** (`vehicle_controls_module.py`) — translates vehicle state into CAN frames and puts them on `vcan0`.
+
+Options: `--dbc <path>`, `--vcan <name>`, `--map <name>` and `--avtp` (run `./1_up_environment.sh --help` for details).
 
 To confirm the virtual CAN bus is active and producing traffic, run in a separate terminal:
 
@@ -320,7 +341,7 @@ When you are done, tear everything down cleanly:
 ./2_down_environment.sh
 ```
 
-The script stops the vehicle controls module, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, and finally removes `vcan0` and unloads the `vcan` kernel module.
+The script stops the vehicle controls module, then the CARLA client module (waiting up to 10 seconds for a clean exit before force-killing), then the CARLA server, then the `candump` recorder, and finally removes `vcan0` and unloads the `vcan` kernel module. If the AVTP network exists (the run used `--avtp`), it is torn down as well; otherwise it is left alone.
 
 You should see an output like the following, meaning that the environment was properly brought down:
 
@@ -334,9 +355,35 @@ Stopping CARLA simulator...
 CARLA (PID 10158 10169) stopped.
 FUnixPlatformMisc::RequestExitWithStatus
 FUnixPlatformMisc::RequestExit
+Stopping CAN recorder...
+candump (PID 10150) stopped.
 Bringing virtual CAN bus down...
+Logs for this run: /path/to/yes-carla-can/traffic_logs/run_20261124_101500
 Environment is down!
 ```
+
+### Optional: AVTP camera stream
+
+The AVTP camera network is **off by default**. To enable it:
+
+```bash
+./1_up_environment.sh --avtp
+```
+
+This streams the hood camera over AVTP (IEEE 1722) on a virtual Ethernet network. The vehicle controls module receives it, shows it in an **ffplay** window and feeds it to the decision engine; its window also shows `AVTP rx` packet/loss counters. If the ffplay window does not appear, run `xhost +local:root` and start again. All details are in [`avtp_network/README.md`](avtp_network/README.md).
+
+### Run logs
+
+Every run writes its logs to one folder, `traffic_logs/run_<YYYYmmdd_HHMMSS>/`, so CAN and AVTP data of the same run stay together:
+
+| File | Content | When |
+|---|---|---|
+| `can.log` | `candump` log of `vcan0` | always |
+| `avtp.pcap` | AVTP frames captured on the virtual switch | `--avtp` |
+| `tcpdump.log` | tcpdump messages | `--avtp` |
+| `avtp_stream.ts` | received camera video (play with `ffplay`) | `--avtp` |
+
+The path is printed by `1_up_environment.sh` and `2_down_environment.sh`, and the latest one is stored in `traffic_logs/.current_run`.
 
 ---
 
@@ -515,7 +562,7 @@ You can also watch the IDS output during the fuzzy attack:
 
 ## Experiment #4 — Collecting network traffic
 
-Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Using the built-in `can-utils` tooling, this is as simple as:
+Beyond observing live traffic, another benefit of the virtual CAN bus is the ability to record traffic logs for further analysis. Every run already records `vcan0` automatically into `traffic_logs/run_<timestamp>/can.log` (see [Run logs](#run-logs)). To record separately, using the built-in `can-utils` tooling, this is as simple as:
 
 ```bash
 candump -l vcan0

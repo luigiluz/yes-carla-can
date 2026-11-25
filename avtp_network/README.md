@@ -1,308 +1,258 @@
-# virtual-avtp-network
+# AVTP camera network
 
-A self-contained demonstration of **video transmission over the AVTP protocol
-(IEEE 1722)** using Linux network namespaces and the
-[Scapy](https://scapy.net/) packet-crafting library.
+This folder adds an **automotive Ethernet camera link** to Yes, CARLA CAN. The
+hood camera of the CARLA ego vehicle is encoded as H.264 video, packed into
+**AVTP (IEEE 1722) IEC 61883-4 MPEG-TS** packets and sent over a virtual
+Layer-2 network built from Linux network namespaces. On the other side, the
+**vehicle controls module** receives the stream, shows it live and hands it to
+a **decision engine**, completing the pipeline:
 
-The goal is to be didactic: every layer of the stack — from the virtual
-Ethernet wires up to the AVTP CVF header and image fragmentation — is
-implemented explicitly so that each step can be inspected, captured, and
-understood.
+```
+camera ──AVTP──► [decision engine] ──► vehicle controls ──CAN──► vehicle
+```
+
+The AVTP network is **opt-in**: it is only created when the environment is
+started with `--avtp`.
 
 ---
 
 ## Table of Contents
 
-1. [Architecture](#architecture)
-2. [How It Works](#how-it-works)
-3. [Project Structure](#project-structure)
-4. [Prerequisites](#prerequisites)
-5. [Quick Start](#quick-start)
-6. [Usage Reference](#usage-reference)
-7. [Inspecting the Traffic](#inspecting-the-traffic)
+1. [Quick start](#quick-start)
+2. [Architecture](#architecture)
+3. [Packet format](#packet-format)
+4. [Files](#files)
+5. [Logs and captures](#logs-and-captures)
+6. [Running the receiver standalone](#running-the-receiver-standalone)
+7. [Inspecting the traffic](#inspecting-the-traffic)
+
+---
+
+## Quick start
+
+```bash
+./1_up_environment.sh --avtp
+```
+
+This brings up CARLA, the CAN bus **and** the AVTP network. Once the windows
+appear:
+
+- the **ffplay** window ("AVTP Live Stream") shows the hood camera as received
+  over AVTP;
+- the vehicle controls window shows `AVTP rx: <packets> | <KB> | loss <n>`
+  in its top-left corner;
+- in the CARLA client window, `M` pauses/resumes the camera stream.
+
+Tear everything down with:
+
+```bash
+./2_down_environment.sh
+```
+
+If the ffplay window does not open, allow root processes to use your X display
+with `xhost +local:root` and start again.
 
 ---
 
 ## Architecture
 
 ```
- ┌─────────────────────┐        ┌──────────────────────────────┐        ┌─────────────────────┐
- │    sender  (ns)      │        │         switch  (ns)         │        │   receiver  (ns)     │
- │                      │        │                              │        │                      │
- │  sender.py           │        │  Linux bridge  br0           │        │  receiver.py         │
- │  (reads PNG frames,  │        │  (forwards L2 frames,        │        │  (reassembles AVTP   │
- │   builds AVTP pkts,  │        │   no IP, no STP)             │        │   fragments, renders │
- │   sends via Scapy)   │        │                              │        │   frames in OpenCV)  │
- │                      │        │  ┌──────────┐                │        │                      │
- │        veth-s ───────┼────────┼─►│veth-s-sw │                │        │                      │
- │                      │        │  └────┬─────┘                │        │                      │
- │                      │        │       │  br0                 │        │                      │
- │                      │        │  ┌────┴─────┐                │        │                      │
- │                      │        │  │veth-r-sw │────────────────┼────────┼─── veth-r            │
- │                      │        │  └──────────┘                │        │                      │
- └─────────────────────┘        └──────────────────────────────┘        └─────────────────────┘
+          host (root namespace)                switch (ns)               host (root namespace)
+ ┌────────────────────────────────┐      ┌──────────────────────┐      ┌─────────────────────────────────────┐
+ │ CARLA_client_module.py         │      │   Linux bridge br0   │      │ vehicle_controls_module.py          │
+ │  sensors/camera.py             │      │   (no IP, no STP)    │      │  AvtpReceiver (thread)              │
+ │   CARLA RGB camera 960x400     │      │                      │      │   ├─► ffplay (live window)          │
+ │   → H.264 / MPEG-TS (PyAV)     │      │  ┌──────────┐        │      │   ├─► avtp_stream.ts (run folder)   │
+ │   → AVTP packets (raw socket)  │      │  │veth-s-sw │        │      │   └─► DecisionEngine.on_ts_data()   │
+ │                                │      │  └────┬─────┘        │      │  DecisionEngine.apply(control)      │
+ │          veth-s ───────────────┼──────┼──────►│ br0          │      │   → CAN frames on vcan0             │
+ │                                │      │  ┌────┴─────┐        │      │                                     │
+ │                                │      │  │veth-r-sw │────────┼──────┼──────► veth-r                       │
+ │                                │      │  └──────────┘        │      │                                     │
+ └────────────────────────────────┘      │  tcpdump → avtp.pcap │      └─────────────────────────────────────┘
+                                         └──────────────────────┘
 
- EtherType: 0x22F0 (AVTP)   ·   Pure Layer 2   ·   No IP addresses
+ EtherType 0x22F0 (AVTP) · pure Layer 2 · no IP addresses
 ```
 
-Three Linux **network namespaces** act as isolated network stacks:
+How the network is built:
 
-| Namespace | Role | Interface |
-|---|---|---|
-| `sender` | Reads images and transmits AVTP packets | `veth-s` |
-| `switch` | Bridges traffic between sender and receiver | `veth-s-sw`, `veth-r-sw`, `br0` |
-| `receiver` | Receives, reassembles, and displays frames | `veth-r` |
+1. `setup.sh` creates three namespaces (`sender`, `switch`, `receiver`) and two
+   veth pairs (virtual patch cables): `veth-s ↔ veth-s-sw` and
+   `veth-r ↔ veth-r-sw`. The `-sw` ends are attached to bridge `br0` inside
+   `switch`, which forwards Ethernet frames like a physical switch.
+2. `1_up_environment.sh --avtp` then moves **both** outer ends, `veth-s` and
+   `veth-r`, into the host namespace. The CARLA client (sender) and the vehicle
+   controls (receiver) run on the host, so they can reach `vcan0`, the CARLA
+   server on localhost and their AVTP interface at the same time. Frames still
+   travel through `br0` in the `switch` namespace.
+3. With `--capture`, `tcpdump` records every AVTP frame crossing `br0`.
 
-The namespaces are connected by two **veth (virtual Ethernet) pairs** — a
-Linux primitive that works like a patch cable: anything written into one end
-comes out the other. The switch namespace hosts a software **bridge** (`br0`)
-that forwards Ethernet frames between the two veth pairs, just as a real
-Ethernet switch would.
+### Sender: `sensors/camera.py`
 
-No IP addresses are assigned anywhere. AVTP is a **Layer-2 protocol**
-(EtherType `0x22F0`) and travels directly inside Ethernet frames.
+`RGBCameraSensor` (created only when the client runs with `--avtp`):
+
+1. receives each 960x400 camera image from CARLA at 30 FPS;
+2. encodes it with `MPEGTSStreamEncoder` (PyAV / FFmpeg, H.264, `zerolatency`,
+   a keyframe every 5 frames, SPS/PPS repeated) into MPEG-TS;
+3. prefixes every 188-byte TS packet with a 4-byte source packet header (SPH),
+   giving 192-byte blocks (IEC 61883-4);
+4. calls `avtp.fragment_mpegts_stream()` to pack 2 blocks per AVTP packet and
+   sends them on `veth-s` through a raw `AF_PACKET` socket.
+
+### Receiver: `receiver.py` inside `vehicle_controls_module.py`
+
+`AvtpReceiver` opens a raw socket bound to EtherType `0x22F0` on `veth-r`
+(16 MB kernel receive buffer) and runs the receive loop in a background thread.
+For every packet `ReceiverState.handle_packet()`:
+
+1. extracts the TS packets with `avtp.parse_mpegts_stream_packet()`;
+2. checks the AVTP `sequence_num` and counts lost packets;
+3. writes the TS data to `avtp_stream.ts`;
+4. passes it to the `on_ts_data` callback (the decision engine);
+5. feeds ffplay through a pipe, after an initial 3264-byte de-jitter buffer.
+
+`stop()` closes the socket, the file and ffplay, and prints a reception
+summary. The vehicle controls module calls it on ESC, Ctrl-C and SIGTERM
+(`2_down_environment.sh`).
+
+### Decision engine: `decision_engine.py`
+
+`DecisionEngine` sits between the stream and the CAN output. Every control
+produced by the keyboard passes through `DecisionEngine.apply(control)` before
+it is sent on the CAN bus. It is currently a **pass-through stub**: it records
+the incoming video data and returns the control unchanged. Perception and
+decision logic (e.g. decoding frames and adjusting throttle/brake/steer) goes
+there.
 
 ---
 
-## How It Works
+## Packet format
 
-### 1. AVTP CVF — the protocol layer (`avtp.py`)
-
-AVTP (**Audio Video Transport Protocol**, IEEE 1722) is designed to carry
-time-sensitive multimedia streams over Ethernet. This demo uses the
-**CVF (Compressed Video Format)** subtype (`0x02`), which is meant for
-carrying compressed video payloads such as MJPEG or H.264.
-
-A custom Scapy `AVTP` packet class is defined with the full CVF header
-(24 bytes):
+Every AVTP frame is 430 bytes:
 
 ```
- 0                   1                   2                   3
- 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|    subtype    |sv| ver |mr|r|tv|tu| sequence_num |   reserved  |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                          stream_id (64 bits)                   |
-|                                                                |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                       avtp_timestamp                           |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|    format     | format_subtype|           reserved             |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|        stream_data_length     |M|   evt   |     reserved       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+┌───────────┬──────────────────────┬──────────┬───────────────────┬───────────────────┐
+│ Ethernet  │ AVTP 61883 header    │ CIP      │ block 1           │ block 2           │
+│ 14 B      │ 24 B                 │ 8 B      │ SPH 4 B + TS 188 B│ SPH 4 B + TS 188 B│
+└───────────┴──────────────────────┴──────────┴───────────────────┴───────────────────┘
+ offset 0     14                     38         46 (TS sync 0x47 at 50)
 ```
 
-Key fields:
-- **`subtype`** `0x02` — identifies this as a CVF stream
-- **`sv`** — stream ID is valid
-- **`tv`** — the `avtp_timestamp` field is valid
-- **`sequence_num`** — per-stream packet counter (wraps at 255); the receiver
-  can use this to detect dropped packets
-- **`stream_id`** — 64-bit identifier for the AVTP stream
-- **`avtp_timestamp`** — presentation timestamp (low 32 bits of nanoseconds)
-- **`marker_bit` (M)** — set to `1` on the **last fragment** of each image
-  frame, signalling the receiver to begin reassembly
+| Field | Value |
+|---|---|
+| Destination MAC | `91:e0:f0:00:fe:00` (AVTP multicast, IEEE 1722 Annex B) |
+| EtherType | `0x22F0` |
+| AVTP subtype | `0x00` (IEC 61883/IIDC) |
+| `sequence_num` | byte 16; increments per packet, wraps at 255 (used for loss detection) |
+| `stream_id` | `0xAABBCCDDEEFF0001` (default) |
+| `stream_data_length` | `0x0188` = 392 B (CIP + 2 blocks) |
+| 1394 tag/channel, tcode | `0x5F`, `0xA0` |
+| CIP header | `3F 06 C4 <DBC> A0 00 00 00`; FMT = MPEG-TS, DBC increases by 16 per packet |
 
-### 2. Fragmentation
-
-PNG images from the input dataset are typically hundreds of kilobytes — far
-larger than a single Ethernet frame (MTU 1500 bytes). Each image is therefore
-split into chunks before transmission.
-
-Every AVTP packet payload carries a **10-byte fragment sub-header** followed
-by a raw chunk of the image:
-
-```
-[ frame_num (2B) | fragment_offset (4B) | total_size (4B) ][ image chunk ]
-```
-
-- **`frame_num`** — which image frame this fragment belongs to (wraps at 65535)
-- **`fragment_offset`** — byte position of this chunk within the full image
-- **`total_size`** — total byte length of the full image
-
-The receiver buffers incoming fragments indexed by `frame_num`. When a packet
-arrives with `marker_bit = 1`, reassembly is triggered: the chunks are placed
-at their correct offsets into a byte buffer, which is then decoded as a PNG.
-
-### 3. Sender (`sender.py`)
-
-```
-PNG files on disk
-      │
-      ▼
- read_bytes()
-      │
-      ▼
- fragment_image()  ──►  list of Ether / AVTP packets
-                              │
-                              ▼
-                         sendp()  ──►  veth-s  ──►  br0  ──►  veth-r
-```
-
-The sender reads frames at a configurable rate (`--fps`), fragments each one,
-and transmits the packet list in a single `sendp()` call. A frame-period sleep
-maintains the target frame rate.
-
-### 4. Receiver (`receiver.py`)
-
-```
-veth-r
-  │
-  ▼
-sniff(filter="ether proto 0x22F0")
-  │
-  ▼
-parse_avtp_fragment()  ──►  buffer[frame_num].append(fragment)
-                                      │  (on marker_bit = 1)
-                                      ▼
-                           reassemble_fragments()
-                                      │
-                                      ▼
-                           cv2.imdecode()  ──►  cv2.imshow()
-```
-
-Scapy's `sniff()` runs with a BPF filter that passes only AVTP EtherType
-frames, keeping the callback lean. Each completed frame is decoded from PNG
-bytes with OpenCV and displayed in a live window with an on-screen HUD showing
-frame number, fragment count, and running FPS.
+The last packet of an encoded frame is padded with null TS packets
+(PID `0x1FFF`) when needed.
 
 ---
 
-## Project Structure
+## Files
 
-```
-virtual-avtp-network/
-├── setup.sh          # Network namespace + bridge setup / teardown
-├── avtp.py           # AVTP CVF Scapy layer + fragmentation helpers
-├── sender.py         # AVTP video sender
-├── receiver.py       # AVTP video receiver with OpenCV display
-├── requirements.txt  # Python dependencies
-└── _out/
-    └── camera/       # Input PNG frames (1,645 files)
-```
-
----
-
-## Prerequisites
-
-- Linux (namespaces and veth require the Linux kernel)
-- `iproute2` (`ip` command) — standard on most distros
-- `tcpdump` — for the optional packet capture
-- Python 3.11+
-- `sudo` / root access — raw socket operations require elevated privileges
-
----
-
-## Quick Start
-
-**1. Clone and set up the Python environment**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-**2. Create the virtual network**
-
-```bash
-sudo bash setup.sh
-```
-
-**3. Start the receiver** *(in one terminal)*
-
-```bash
-sudo ip netns exec receiver .venv/bin/python3 receiver.py
-```
-
-An OpenCV window will open and wait for incoming frames.
-
-**4. Start the sender** *(in a second terminal)*
-
-```bash
-sudo ip netns exec sender .venv/bin/python3 sender.py
-```
-
-Frames will start appearing in the receiver window immediately.
-
-**5. Tear down**
-
-```bash
-sudo bash setup.sh --teardown
-```
-
----
-
-## Usage Reference
+| File | Purpose |
+|---|---|
+| `setup.sh` | Create/tear down the namespaces, veth pairs and bridge; optional tcpdump capture |
+| `avtp.py` | Build (`fragment_mpegts_stream`) and parse (`parse_mpegts_stream_packet`) AVTP MPEG-TS packets |
+| `receiver.py` | `AvtpReceiver` / `ReceiverState`, also usable as a standalone script |
+| `../sensors/camera.py` | Camera sensor, H.264/MPEG-TS encoder and AVTP sender |
+| `../decision_engine.py` | Decision engine stub between the stream and the vehicle controls |
 
 ### `setup.sh`
 
 ```
-sudo bash setup.sh [--capture] [--teardown]
+sudo bash setup.sh [--capture [--capture-dir <dir>]] [--teardown]
 ```
 
 | Flag | Description |
 |---|---|
-| *(none)* | Create namespaces, veth pairs, and bridge |
-| `--capture` | Also start `tcpdump` on `br0`; write AVTP frames to a timestamped `.pcap` file |
-| `--teardown` | Delete all namespaces and stop any running capture |
+| *(none)* | Create namespaces, veth pairs and bridge |
+| `--capture` | Also start `tcpdump` on `br0` |
+| `--capture-dir <dir>` | Write `<dir>/avtp.pcap` and `<dir>/tcpdump.log` (without it: `./avtp_capture_<timestamp>.pcap`) |
+| `--teardown` | Stop the capture and delete all namespaces (this also removes `veth-s`/`veth-r` from the host) |
 
+You normally do not call it directly: `1_up_environment.sh --avtp` and
+`2_down_environment.sh` do.
 
+### AVTP options of the modules
 
-### `receiver.py`
+| Module | Option | Description |
+|---|---|---|
+| `CARLA_client_module.py` | `--avtp` | Create the camera sensor and stream it on `veth-s` |
+| `vehicle_controls_module.py` | `--avtp` | Start the receiver and the decision engine |
+| | `--avtp-interface` | Interface to listen on (default `veth-r`) |
+| | `--log-dir` | Folder for `avtp_stream.ts` (`1_up` passes the run folder) |
+| | `--no-video-window` | Do not open ffplay (the `.ts` is still saved) |
 
+---
+
+## Logs and captures
+
+Every run of `1_up_environment.sh` writes its logs to
+`traffic_logs/run_<YYYYmmdd_HHMMSS>/`, so CAN and AVTP data of the same run
+stay together:
+
+| File | Written by | When |
+|---|---|---|
+| `can.log` | `candump` on `vcan0` | always |
+| `avtp.pcap` | `tcpdump` on `br0` (switch namespace) | `--avtp` |
+| `tcpdump.log` | `tcpdump` messages | `--avtp` |
+| `avtp_stream.ts` | receiver in the vehicle controls module | `--avtp` |
+
+The folder of the latest run is stored in `traffic_logs/.current_run` and is
+printed by both `1_up_environment.sh` and `2_down_environment.sh`. Files
+written by root processes (`avtp.pcap`, `avtp_stream.ts`) are owned by root but
+readable by everyone.
+
+Play back the received video:
+
+```bash
+ffplay traffic_logs/run_<timestamp>/avtp_stream.ts
 ```
-sudo ip netns exec receiver .venv/bin/python3 receiver.py [options]
 
+---
+
+## Running the receiver standalone
+
+For debugging, the receiver can also run on its own while the environment is
+up with `--avtp` (stop the one inside the vehicle controls module first, or use
+another interface, as both would save to the same file):
+
+```bash
+sudo -E DISPLAY=$DISPLAY PYTHONPATH=. "$CONDA_PREFIX/bin/python" \
+    avtp_network/receiver.py -i veth-r -o traffic_logs/run_<timestamp>
 ```
 
 | Option | Default | Description |
 |---|---|---|
 | `--interface` / `-i` | `veth-r` | Network interface to listen on |
-| `--output-dir` / `-o` | *(none)* | Save each received frame as a `.png` file |
-| `--timeout` / `-t` | *(none)* | Stop after N seconds of no traffic |
-
-
-### `sender.py`
-
-```
-sudo ip netns exec sender .venv/bin/python3 sender.py [options]
-```
-
-| Option | Default | Description |
-|---|---|---|
-| `--interface` / `-i` | `veth-s` | Network interface to send on |
-| `--fps` / `-f` | `30` | Target transmission frame rate |
-| `--images-dir` / `-d` | `_out/camera` | Directory containing `.png` frames |
-| `--stream-id` / `-s` | `0xAABBCCDDEEFF0001` | 64-bit AVTP stream identifier (hex) |
-| `--loop` / `-l` | off | Loop through all frames indefinitely |
+| `--output-dir` / `-o` | *(none)* | Save the stream as `<dir>/avtp_stream.ts` |
+| `--timeout` / `-t` | *(none)* | Stop after N seconds without packets |
+| `--no-video-window` | off | Do not open ffplay |
 
 ---
 
-## Inspecting the Traffic
+## Inspecting the traffic
 
-### Live terminal view
+Live view at the switch:
 
 ```bash
 sudo ip netns exec switch tcpdump -i br0 -e ether proto 0x22F0
 ```
 
-### Record to PCAP (automatic)
+From the recorded capture:
 
 ```bash
-sudo bash setup.sh --capture
-# ... run sender and receiver ...
-sudo bash setup.sh --teardown
-# output: avtp_capture_<timestamp>.pcap
+tshark -r traffic_logs/run_<timestamp>/avtp.pcap -c 5
+wireshark traffic_logs/run_<timestamp>/avtp.pcap
 ```
 
-### Open in Wireshark
-
-```bash
-wireshark avtp_capture_<timestamp>.pcap
-```
-
-Wireshark has a built-in AVTP dissector (available from version 3.x). It will
-decode the CVF subtype, stream ID, sequence numbers, and timestamps directly
-from the capture file.
+Wireshark has a built-in IEEE 1722 dissector and decodes the AVTP header,
+stream ID and sequence numbers directly from the capture.
