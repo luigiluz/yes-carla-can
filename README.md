@@ -96,7 +96,7 @@ yes-carla-can/
 │   ├── test_avtp_receiver.py     #   Tests for AVTP packet reception and loss detection
 │   └── test_decision_engine.py   #   Tests for the decision engine stub
 │
-├── traffic_logs/                 # Per-run logs (run_<timestamp>/: can.log, AVTP capture and stream)
+├── traffic_logs/                 # Per-run logs (run_<timestamp>/: can.log, AVTP capture and stream), git-ignored
 │
 ├── carla-0-9-15/                 # CARLA 0.9.15 simulator installation (downloaded by script)
 │

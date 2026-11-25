@@ -184,4 +184,7 @@ _out (copy)/
 candump*
 *.pcap
 
+# Collected CAN/AVTP traffic (per-run logs, captures)
+traffic_logs/
+
 output_stream*
