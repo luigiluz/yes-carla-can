@@ -75,14 +75,15 @@ fi
 
 
 if [ "$AVTP_ACTIVE" -eq 1 ]; then
-    # Stop AVTP Receiver (caso esteja a rodar em background ou num terminal)
-    echo "Stopping AVTP receiver..."
+    # The receiver now runs inside vehicle_controls_module.py (stopped above).
+    # This only catches a standalone receiver.py started by hand.
+    echo "Stopping standalone AVTP receiver (if any)..."
     RECEIVER_PID=$(pgrep -d ' ' -f "receiver.py")
     if [ -n "$RECEIVER_PID" ]; then
         kill $RECEIVER_PID 2>/dev/null || true
         echo "AVTP receiver (PID $RECEIVER_PID) stopped."
     else
-        echo "AVTP receiver process not found."
+        echo "No standalone AVTP receiver running."
     fi
 fi
 

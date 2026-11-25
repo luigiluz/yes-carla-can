@@ -23,7 +23,9 @@ What this script does:
      so that candump labels attacker frames as 'R' and normal frames as 'T'
   4. Waits 5 seconds for CARLA to initialise
   5. Starts the CARLA client module (spawns the vehicle and sensors)
-  6. Starts the vehicle controls module (translates vehicle state into CAN frames)
+  6. Starts the vehicle controls module (translates vehicle state into CAN frames).
+     With --avtp it also receives the camera stream (live ffplay window) and
+     feeds it to the decision engine.
 
 Every run writes its logs to traffic_logs/run_<YYYYmmdd_HHMMSS>/:
   can.log        candump of the main CAN bus (always)
@@ -157,8 +159,6 @@ echo $! > "${LOGS_DIR}/.candump.pid"
 echo "Waiting for CARLA to start..."
 sleep 5
 
-# Executa os módulos Python no Host com privilégios para o Scapy
-echo "Starting CARLA client module..."
 CLIENT_ARGS=(--vcan "${VCAN_INTERFACE}")
 if [[ -n "${MAP}" ]]; then
     echo "Requesting CARLA map: ${MAP}"
@@ -168,28 +168,21 @@ if [[ "${AVTP}" -eq 1 ]]; then
     CLIENT_ARGS+=(--avtp)
 fi
 
-if [[ "${AVTP}" -eq 1 ]]; then
-    # Executar os módulos Python no Host com sudo -E (Acesso a vcan0 + veth-s Socket RAW + localhost)
-    echo ""
-    echo "======================================================================"
-    echo " INFRAESTRUTURA DE REDE E CARLA PRONTOS!"
-    echo " Agora, abra OUTRO terminal e inicie o RECEIVER:"
-    echo ""
-    echo "   xhost +local:sudo "
-    echo ""
-    echo ""
-    echo "   sudo -E DISPLAY=\$DISPLAY PYTHONPATH=. \"\$CONDA_PREFIX/bin/python\" avtp_network/receiver.py -i veth-r -o ${RUN_DIR}"
-    echo ""
-    echo "======================================================================"
-    read -p "Pressione [ENTER] AQUI após iniciar o receiver para subir os clientes do CARLA..."
-fi
 
 # Executar os módulos Python no Host
 echo "Starting CARLA client module..."
 sudo -E "${PYTHON_EXEC}" "${SCRIPT_DIR}/CARLA_client_module.py" "${CLIENT_ARGS[@]}" &
 
+# Vehicle controls also hosts the AVTP receiver (camera -> decision engine -> CAN)
+VC_ARGS=(--dbc "${DBC_PATH}" --vcan "${VCAN_INTERFACE}")
+if [[ "${AVTP}" -eq 1 ]]; then
+    VC_ARGS+=(--avtp --avtp-interface veth-r --log-dir "${RUN_DIR}")
+    echo "AVTP receiver runs inside the vehicle controls module (stream saved to ${RUN_DIR}/avtp_stream.ts)."
+    echo "If the ffplay window does not open, allow root X access with: xhost +local:root"
+fi
+
 echo "Starting vehicle controls module..."
-sudo "${PYTHON_EXEC}" "${SCRIPT_DIR}/vehicle_controls_module.py" --dbc "${DBC_PATH}" --vcan "${VCAN_INTERFACE}" &
+sudo -E "${PYTHON_EXEC}" "${SCRIPT_DIR}/vehicle_controls_module.py" "${VC_ARGS[@]}" &
 
 echo "Environment is completely up!"
 echo "Logs for this run: ${RUN_DIR}"
