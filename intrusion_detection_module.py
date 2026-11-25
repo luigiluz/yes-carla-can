@@ -10,7 +10,7 @@ DETECTOR_FACTORY = {
     "ml":      MlIntrusionDetection,
 }
 
-DEFAULT_DATA_PATH = Path(__file__).parent / "traffic_logs" / "logs_for_ml_ids_training_parsed_statistics.json"
+DEFAULT_DATA_PATH = Path(__file__).parent / "defense" / "baselines" / "logs_for_ml_ids_training_parsed_statistics.json"
 
 def main():
     print("Intrusion Detection System for CAN Bus")

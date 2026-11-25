@@ -63,7 +63,8 @@ yes-carla-can/
 │   └── network.py                #   SocketCAN interface (send/receive frames)
 │
 ├── defense/                      # IDS algorithm implementations
-│   └── id_time_intrusion_detection.py  # Statistical inter-arrival time detector
+│   ├── id_time_intrusion_detection.py  # Statistical inter-arrival time detector
+│   └── baselines/                #   Training log, parsed CSV and id_time statistics (default baseline)
 │
 ├── gui/                          # Graphical interface components
 │   ├── world.py                  #   CARLA world and vehicle management
